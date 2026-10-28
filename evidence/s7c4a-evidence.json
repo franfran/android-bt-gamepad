@@ -1,0 +1,23 @@
+{
+  "blockers": [
+    "Bluetooth runtime dlopen remains untested",
+    "Android linker namespace acceptance cannot be proven outside the target process",
+    "Safely resuming interrupted target linker call is not demonstrated"
+  ],
+  "checks": {
+    "addon_matches_local": true,
+    "addon_sha256": "079b177fdb90fc4ed2b6ac727925263aef1615b0808cd72d4268b95e5e90197a",
+    "addon_size": 1764,
+    "already_mapped": false,
+    "bluetooth_library_mapped": true,
+    "libdl_mapped": true,
+    "pid": 671,
+    "pid_unchanged": true,
+    "threads": 49,
+    "tracerpid": 0,
+    "uid": 1002
+  },
+  "injection_authorized": false,
+  "mode": "stage",
+  "stage": "S7-C4A"
+}

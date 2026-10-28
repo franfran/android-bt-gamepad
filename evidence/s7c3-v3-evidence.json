@@ -1,0 +1,27 @@
+{
+  "blockers": [
+    "Bluetooth linker namespace acceptance not demonstrated",
+    "Linker-lock contention and interrupted dlopen recovery not proven safe",
+    "Target-specific loader not authorized for injection"
+  ],
+  "injection_authorized": false,
+  "inspection_issues": [],
+  "libdl_sha256": "6a35ed10db17bccceb6d09a042166ae8230c625b0b7f1cdd5baba7c312e01b73",
+  "mode": "READ_ONLY",
+  "pid": 675,
+  "stage": "S7-C3",
+  "symbols": {
+    "android_dlopen_ext": {
+      "file_offset": "0x896",
+      "instruction_address": "0xead31896",
+      "load_bias": "0xead30000",
+      "thumb_function_pointer": "0xead31897"
+    },
+    "dlopen": {
+      "file_offset": "0x850",
+      "instruction_address": "0xead31850",
+      "load_bias": "0xead30000",
+      "thumb_function_pointer": "0xead31851"
+    }
+  }
+}

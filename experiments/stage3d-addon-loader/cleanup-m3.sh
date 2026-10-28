@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DEVICE="${1:-192.0.2.10:1080}"
+adb -s "$DEVICE" shell su 0 rm -rf /data/local/tmp/retrobox_stage3d
+echo 'Removed Stage 3D test binaries from M3. No system files were changed.'

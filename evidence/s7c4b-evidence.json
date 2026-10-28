@@ -1,0 +1,38 @@
+{
+  "addon": {
+    "mapped": false,
+    "matches_local": true,
+    "sha256": "079b177fdb90fc4ed2b6ac727925263aef1615b0808cd72d4268b95e5e90197a"
+  },
+  "blockers": [
+    "No tested safe return trampoline for an already-running Android Bluetooth process",
+    "Linker namespace acceptance cannot be verified without executing inside target",
+    "Interrupted linker call cannot be safely rolled back by restoring registers",
+    "No approved service-recovery procedure for failed target dlopen"
+  ],
+  "injection_authorized": false,
+  "inspection_issues": [],
+  "libdl_sha256": "6a35ed10db17bccceb6d09a042166ae8230c625b0b7f1cdd5baba7c312e01b73",
+  "mode": "READ_ONLY_INTEGRATION",
+  "stage": "S7-C4B",
+  "symbols": {
+    "android_dlopen_ext": {
+      "file_offset": "0x896",
+      "instruction_address": "0xf326e896",
+      "load_bias": "0xf326d000",
+      "thumb_function_pointer": "0xf326e897"
+    },
+    "dlopen": {
+      "file_offset": "0x850",
+      "instruction_address": "0xf326e850",
+      "load_bias": "0xf326d000",
+      "thumb_function_pointer": "0xf326e851"
+    }
+  },
+  "target": {
+    "pid": 671,
+    "threads": 49,
+    "tracerpid": 0,
+    "uid": 1002
+  }
+}

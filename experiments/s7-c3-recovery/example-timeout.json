@@ -1,0 +1,8 @@
+{
+  "bluetooth_injection_authorized": false,
+  "phase": "QUARANTINE",
+  "restart_required": true,
+  "safe_to_retry": false,
+  "scenario": "timeout-during-linker",
+  "stop_reason": "timeout"
+}

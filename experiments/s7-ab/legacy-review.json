@@ -1,0 +1,35 @@
+{
+  "blockers": [
+    "BLOCKER: uses interrupted Bluetooth SP+256 as scratch",
+    "BLOCKER: potentially unbounded blocking wait4 on remote dlopen",
+    "BLOCKER: uses NULL return address in target process",
+    "BLOCKER: raw PTRACE_PEEKDATA treats syscall return as word",
+    "No audited target-owned remote mmap/munmap lifecycle integrated into Bluetooth loader",
+    "No demonstrated safe recovery from linker-lock contention in Bluetooth process",
+    "No demonstrated namespace acceptance for injected addon in Bluetooth process",
+    "No independently validated failure recovery following interrupted remote dlopen"
+  ],
+  "checks": {
+    "fixture": {
+      "pid": [
+        "675"
+      ],
+      "reported": [
+        "48",
+        "48"
+      ],
+      "tracer": [
+        "0"
+      ]
+    },
+    "source_hazards": [
+      "BLOCKER: uses interrupted Bluetooth SP+256 as scratch",
+      "BLOCKER: potentially unbounded blocking wait4 on remote dlopen",
+      "BLOCKER: uses NULL return address in target process",
+      "BLOCKER: raw PTRACE_PEEKDATA treats syscall return as word"
+    ],
+    "source_sha256": "e35054d6fb59b4dde0c0e3c93453f2a0105fa543b6a47bb8e115e0f12203d01f"
+  },
+  "injection_authorized": false,
+  "version": "s7-ab-v1"
+}

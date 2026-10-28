@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'city.retrobox.ds3diagnostic'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'city.retrobox.ds3diagnostic'
+        minSdk 31
+        targetSdk 32
+        versionCode 2
+        versionName '0.2.0'
+    }
+}

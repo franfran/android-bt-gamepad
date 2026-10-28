@@ -1,0 +1,38 @@
+name: RetroBox research source checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run non-device Python unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stage in s7-ab s7-c3-resolver s7-c3-recovery s7-c4a s7-c4b; do
+            echo "::group::${stage}"
+            ( cd "experiments/${stage}" && python3 -m unittest discover -v )
+            echo "::endgroup::"
+          done
+      - name: Guard against accidental Bluetooth injector enablement
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('experiments/s7-c4b/s7c4b.py').read_text()
+          assert "'injection_authorized':False" in s
+          assert 'PTRACE_ATTACH' not in s
+          assert 'ptrace(' not in s
+          print('S7-C4B remains read-only and fail-closed')
+          PY
