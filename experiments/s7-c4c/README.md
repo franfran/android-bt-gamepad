@@ -72,3 +72,8 @@ exit code, so linker/ptrace failures are visible rather than being swallowed.
 - Bionic linker may accept libraries in the test shell namespace yet reject `/data/local/tmp` from the Bluetooth namespace.
 - `ptrace` stop, signal delivery, TLS and linker locks may behave differently in a full Android service. There is no safe register-only rollback after entering linker. Stalling can force a scoped **test-target** kill, but production process recovery is unproven.
 - Device connection loss can prevent cleanup. Use `adb` to inspect target process and remove only the fixed test directory; never use an unvalidated PID from stale files.
+## M3 v3 acceptance (measured 2026-10-28)
+
+**M3 PASS**: operator verified independent foreground ADB target session alive, 48 workers ready, load-bias resolution, target-private remote `mmap2`, RX return trampoline, negative `dlopen` + `dlerror`, inert module mapped, canaries intact, workers progressed, remote `munmap`, return via test-target image bootstrap and test-only cleanup. The target was independently launched, not forked by tracer. See `docs/STATUS.md` for exact measured assertions. Earlier v1/v2 startup gating failures are superseded by this v3 result.
+
+**Scope guard:** the initial BKPT bootstrap is built into this test target. Bluetooth has no matching test stub. M3 PASS does **not** authorize real Bluetooth injection, prove its linker namespace, guarantee safe rollback, or repair DS3 wireless pairing.
