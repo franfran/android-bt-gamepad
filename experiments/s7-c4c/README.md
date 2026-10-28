@@ -31,11 +31,31 @@ python3 -m unittest discover -s tests -v
 
 Clang / LLD / Python3 / `readelf` required for rebuilding in Linux CI or sandbox. Build produces `target_offsets.h` from exported ELF symbols. The linker stub is a compile-time shim **not shipped**. Target runtime imports the M3's actual Bionic `libdl.so`.
 
+## S7-C4C v2 startup diagnostics
+
+The first M3 run stopped at the runner's **identity gate**:
+`FAIL CLOSED: independently started target identity mismatch`.
+No remote `dlopen` was attempted. The original runner removed the test directory
+before reporting `/proc` or `target.log`, so this output alone cannot establish
+whether the shell-background PID differed from the actual process, the target
+failed to execute, or the 48 worker threads failed to start.
+
+v2 launches via a background `sh -c 'exec ...'` wrapper, waits for a strictly
+validated and ready target (bounded), and cross-checks `pidof` against the
+pidfile. It validates UID 0, exact `/proc/PID/exe`, `/proc/PID/cmdline`,
+`/proc/PID/comm`, tracer and >=49 threads. On mismatch it **prints** the
+observed PID, comm, cmdline, executable, UID, state, thread count and startup
+`target.log` before cleanup, without attaching. Target source also logs basic
+startup and clone failures. No Bluetooth process or system library is touched.
+
+If v2 still fails, share the complete `STARTUP DIAGNOSTICS` section: it will
+identify the next concrete correction without blind retries.
+
 ## Measured vs unmeasured
 
 - **Compiled locally:** target, controller, test .so; ELF32 ARM PIE verified.
 - **Host unit tests:** run locally and in CI.
-- **M3 run:** PENDING. Do not claim M3 PASS before operator shares output.
+- **M3 run:** v1 preflight FAIL CLOSED at identity validation; v2 untested. Do not claim M3 PASS before operator shares output.
 - **Live Bluetooth process:** not touched; `injection_authorized=false`.
 
 ## Cautions / limitations
