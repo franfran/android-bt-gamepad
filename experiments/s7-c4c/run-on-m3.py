@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""S7-C4C independent ARM32 target runner, strictly NOT a Bluetooth injector.
+"""S7-C4C v3: independent ARM32 target held by a foreground ADB session.
 
-This v2 runner diagnoses test-process startup rather than discarding target.log on
-identity mismatch. It never attaches to or kills a process by unverified PID.
+No shell-background PID, no process-group orphaning. The TEST target writes
+its own PID file; root subprocess is a host-side session, not a tracer parent.
+Bluetooth PID, /system, arbitrary library paths and broad kill are forbidden.
 """
 import argparse
 import re
@@ -28,6 +29,74 @@ def adb(serial, *args, timeout=15):
 
 def root(serial, command, timeout=15):
     return adb(serial, 'exec-out', 'su', '0', 'sh', '-c', command, timeout=timeout)
+
+
+def launch_foreground_session(serial):
+    """Keep the ADB channel open for the entire independent target lifetime.
+
+    Android su/sh may kill background descendants when its ADB command ends.
+    This foreground exec prevents that particular parent-shell lifecycle.
+    Target still has no fork relationship with the ARM32 controller.
+    """
+    command = ('cd ' + REMOTE + ' && exec ' + TARGET +
+               ' </dev/null >' + REMOTE + '/target.log 2>&1')
+    return subprocess.Popen(['adb', '-s', serial, 'exec-out', 'su', '0',
+                             'sh', '-c', command],
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE)
+
+
+def own_pid_from_file(serial):
+    raw = safe_root(serial, 'cat ' + REMOTE + '/target.pid').strip()
+    if not re.fullmatch(r'[0-9]{1,8}', raw):
+        return None
+    pid = int(raw)
+    return pid if pid > 1 else None
+
+
+def await_own_pid(serial, session, deadline_s=6):
+    """Only target ELF creates this PID file (stale file removed prelaunch)."""
+    end = time.monotonic() + deadline_s
+    while time.monotonic() < end:
+        pid = own_pid_from_file(serial)
+        if pid:
+            return pid
+        if session.poll() is not None:
+            return None
+        time.sleep(0.15)
+    return None
+
+
+def run_controller(serial):
+    """Show stdout even on nonzero return; otherwise the first fault is lost."""
+    proc = subprocess.run(['adb', '-s', serial, 'exec-out', 'su', '0',
+                           'sh', '-c', REMOTE + '/rbxc4c_controller'],
+                          capture_output=True, text=True, timeout=25, check=False)
+    print('===== M3 S7-C4C RESULT =====')
+    print(proc.stdout.rstrip())
+    if proc.stderr.strip():
+        print('controller stderr:', proc.stderr.strip()[:1500], file=sys.stderr)
+    if proc.returncode != 0:
+        raise RuntimeError('controller exited with code %d; see output above' % proc.returncode)
+    return proc.stdout
+
+
+def stop_host_session(session):
+    """Reap host-side ADB process after verified test-only remote cleanup."""
+    if session is None:
+        return
+    try:
+        session.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        session.terminate()
+        try:
+            session.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            session.kill()
+            session.wait(timeout=2)
+    finally:
+        if session.stderr:
+            session.stderr.close()
 
 
 def safe_root(serial, command):
@@ -74,7 +143,7 @@ def pidof_candidates(serial):
 
 
 def find_target(serial, expected, deadline_s=6):
-    """Recover when Android sh backgrounds a wrapper PID instead of its exec'd child."""
+    """Verify self-recorded PID with process identity; detect any duplicates."""
     end = time.monotonic() + deadline_s
     while time.monotonic() < end:
         candidates = list(dict.fromkeys([expected] + pidof_candidates(serial)))
@@ -91,8 +160,8 @@ def find_target(serial, expected, deadline_s=6):
 
 def diagnostic(serial, expected):
     print('===== S7-C4C STARTUP DIAGNOSTICS (NO PTRACE) =====', file=sys.stderr)
-    print('pidfile PID:', expected, 'pidof candidates:', pidof_candidates(serial), file=sys.stderr)
-    candidates = list(dict.fromkeys([expected] + pidof_candidates(serial)))
+    print('self-recorded PID:', expected, 'pidof candidates:', pidof_candidates(serial), file=sys.stderr)
+    candidates = list(dict.fromkeys(([expected] if expected > 1 else []) + pidof_candidates(serial)))
     for pid in candidates[:5]:
         info = process_snapshot(serial, pid)
         print('proc:', {k: info.get(k) for k in ('pid', 'comm', 'cmdline', 'exe',
@@ -119,49 +188,58 @@ def cleanup(serial, candidates):
 
 def run(serial):
     candidates = set()
+    session = None
+    cleanup_allowed = True
     try:
         adb(serial, 'shell', 'mkdir', '-p', REMOTE)
+        # Enforce single-test state: refuse to trample another running target.
+        lingering = [pid for pid in pidof_candidates(serial) if is_owned_target(serial, pid)]
+        if lingering:
+            cleanup_allowed = False  # Never touch a process we did not launch.
+            raise RuntimeError('previous test target still active; refusing parallel launch')
         for file in ARTIFACTS:
             if not (BASE / file).is_file():
                 raise RuntimeError('missing ARM32 prebuilt: %s' % file)
             adb(serial, 'push', str(BASE / file), REMOTE + '/' + file)
         adb(serial, 'shell', 'chmod', '700', REMOTE + '/rbxc4c_target',
             REMOTE + '/rbxc4c_controller')
-        # The inner shell uses exec so its background PID is the target ELF,
-        # not a long-running wrapper; FDs are fully detached from ADB.
-        root(serial, 'cd ' + REMOTE + '; /system/bin/sh -c '\
-             "'exec " + TARGET + " </dev/null >" + REMOTE + "/target.log 2>&1' "\
-             '</dev/null >/dev/null 2>&1 & echo $! > ' + REMOTE + '/target.pid; sleep 1')
-        raw = root(serial, 'cat ' + REMOTE + '/target.pid').strip()
-        if not re.fullmatch(r'[0-9]+', raw):
-            raise RuntimeError('invalid target PID file; refusing ptrace')
-        expected = int(raw)
+        # Only the fixed test pidfile/log are removed, never arbitrary paths.
+        root(serial, 'rm -f ' + REMOTE + '/target.pid ' + REMOTE + '/target.log')
+        session = launch_foreground_session(serial)
+        expected = await_own_pid(serial, session)
+        if expected is None:
+            diagnostic(serial, -1)
+            status = session.poll()
+            raise RuntimeError('target did not create its own PID file; ADB session status=%s' % status)
         candidates.add(expected)
         pid = find_target(serial, expected)
-        if pid is None:
+        if pid is None or pid != expected:
             diagnostic(serial, expected)
-            raise RuntimeError('independent target failed identity/readiness gate; see diagnostics')
-        candidates.add(pid)
-        if pid != expected:
-            print('STARTUP: corrected shell-wrapper PID %d -> target PID %d' %
-                  (expected, pid))
-            root(serial, "printf '%d\\n' > %s/target.pid" % (pid, REMOTE))
-        print('TARGET READY: PID=%d, 48 workers, identity verified' % pid)
-        result = root(serial, REMOTE + '/rbxc4c_controller', timeout=25)
-        print('===== M3 S7-C4C RESULT =====')
-        print(result)
+            raise RuntimeError('independent target failed identity/readiness gate')
+        if session.poll() is not None:
+            diagnostic(serial, pid)
+            raise RuntimeError('ADB foreground session ended before controller; refusing ptrace')
+        print('TARGET READY: PID=%d, 48 workers, identity verified; ADB session alive' % pid)
+        result = run_controller(serial)
         if 'PASS: non-fork independent ARM32 target' not in result:
             raise RuntimeError('controller did not report complete success')
         print('S7-C4C-1/2 INDEPENDENT TARGET = PASS (NOT Bluetooth authorization)')
         return 0
-    except (RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
         print('FAIL CLOSED:', exc, file=sys.stderr)
+        if session is not None and session.poll() is not None:
+            print('TARGET SESSION EXIT STATUS:', session.returncode, file=sys.stderr)
         return 2
     finally:
         try:
-            cleanup(serial, candidates)
+            if cleanup_allowed:
+                cleanup(serial, candidates)
+            else:
+                print('PRE-EXISTING TEST PROCESS PRESERVED; NO CLEANUP', file=sys.stderr)
         except (RuntimeError, subprocess.TimeoutExpired) as exc:
             print('CLEANUP WARNING:', exc, file=sys.stderr)
+        finally:
+            stop_host_session(session)
 
 
 if __name__ == '__main__':

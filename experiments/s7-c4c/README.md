@@ -31,32 +31,40 @@ python3 -m unittest discover -s tests -v
 
 Clang / LLD / Python3 / `readelf` required for rebuilding in Linux CI or sandbox. Build produces `target_offsets.h` from exported ELF symbols. The linker stub is a compile-time shim **not shipped**. Target runtime imports the M3's actual Bionic `libdl.so`.
 
-## S7-C4C v2 startup diagnostics
+## M3 startup evidence and v3 correction
 
-The first M3 run stopped at the runner's **identity gate**:
-`FAIL CLOSED: independently started target identity mismatch`.
-No remote `dlopen` was attempted. The original runner removed the test directory
-before reporting `/proc` or `target.log`, so this output alone cannot establish
-whether the shell-background PID differed from the actual process, the target
-failed to execute, or the 48 worker threads failed to start.
+- **v1:** `FAIL CLOSED: independently started target identity mismatch`.
+- **v2 (actual M3):** `target.log` contains `TARGET STARTED`,
+  `TARGET PR_SET_NAME OK`, `TARGET 48 WORKERS SPAWNED`, but the shell
+  background PID was already gone and `pidof rbxc4c_target` found no process.
+  **Measured:** target executed through worker spawning, then disappeared.
+  **Hypothesis, NOT confirmed:** Android `su` / shell / ADB job-lifecycle
+  cleanup terminated the background descendant when the shell command ended.
 
-v2 launches via a background `sh -c 'exec ...'` wrapper, waits for a strictly
-validated and ready target (bounded), and cross-checks `pidof` against the
-pidfile. It validates UID 0, exact `/proc/PID/exe`, `/proc/PID/cmdline`,
-`/proc/PID/comm`, tracer and >=49 threads. On mismatch it **prints** the
-observed PID, comm, cmdline, executable, UID, state, thread count and startup
-`target.log` before cleanup, without attaching. Target source also logs basic
-startup and clone failures. No Bluetooth process or system library is touched.
+**v3:** `run-on-m3.py` now keeps a separate, foreground `adb exec-out su 0
+sh -c 'exec rbxc4c_target ...'` session alive throughout the independent
+ARM32 controller execution. This is independently started **from the tracer**:
+the controller does not fork or own its target. The actual target calls ARM32
+`getpid()` and writes the fixed `target.pid` itself. The runner does not infer
+PID from `$!` or use a detached shell background job. It confirms the persistent
+ADB session, validates UID, `/proc` identity and 49+ threads, and rejects an
+already-running target rather than killing it. Test-only cleanup is scoped
+and revalidates target identity before any kill; startup failures retain
+`target.log` for reporting.
 
-If v2 still fails, share the complete `STARTUP DIAGNOSTICS` section: it will
-identify the next concrete correction without blind retries.
+**Tested so far:** local ARM32 ELF32 PIE cross-compile, 16 host contract/mock
+tests. **v3 has NOT YET passed an M3 trial**. Normal `dlopen`, trampoline
+and actual M3 cleanup must be verified before advancing the gate.
+
+The runner now shows controller stdout even if controller returns a nonzero
+exit code, so linker/ptrace failures are visible rather than being swallowed.
 
 ## Measured vs unmeasured
 
 - **Compiled locally:** target, controller, test .so; ELF32 ARM PIE verified.
-- **Host unit tests:** run locally and in CI.
-- **M3 run:** v1 preflight FAIL CLOSED at identity validation; v2 untested. Do not claim M3 PASS before operator shares output.
-- **Live Bluetooth process:** not touched; `injection_authorized=false`.
+- **Host unit tests:** 16 PASS locally; CI is a separate build check.
+- **M3 run:** v1/v2 FAILED CLOSED before ptrace; v3 pending.
+- **Live Bluetooth process:** never touched; injection remains NO-GO.
 
 ## Cautions / limitations
 
