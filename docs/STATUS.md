@@ -37,6 +37,12 @@
 | S7-C3e v2 | B finished before A constructor in both cases; normal and timeout policy PASS | Owned process; does not prove absence of linker locks |
 | S7-C4A v2 | Add-on SHA-256 matches staged bytes; PID unchanged PASS | Add-on staged, **not loaded** |
 | S7-C4B | Read-only integrated resolver/checksum PASS; `inspection_issues=[]` | `addon.mapped=false`, `injection_authorized=false` |
-| S7-C4C | **NOT IMPLEMENTED** | No target-specific safe execution/return/recovery |
+| S7-C4C-1/2 v3 | **M3 PASS (2026-10-28)** | Separately started 48-worker test target, target-private mmap/guard/RW/RX trampoline, negative/positive dlopen, remote dlerror, canaries, worker progression, munmap; bootstrap uses test-target compiled trap only |
 
 Raw results shared by operator are authoritative over README files written before each M3 test. `evidence/` contains selected audit JSON snapshots, not the full raw logs.
+
+## S7-C4C-1/2 real-device closeout (2026-10-28)
+
+Operator ran `experiments/s7-c4c/run-on-m3.py` v3 (PR #3) and supplied the complete M3 stdout. Measured: `TARGET READY: PID=4423, 48 workers, identity verified; ADB session alive`; `TARGET_IDENTITY_CONFIRMED; load_bias=0x03a71000`; target-private `MMAP2 OK`; `RX RETURN TRAMPOLINE VERIFIED`; missing library `DLOPEN NULL` plus nonempty `DLERROR`; inert test module mapped; canaries intact; background workers progressed; remote `MUNMAP` completed; `PASS: non-fork independent ARM32 target call`; test-only cleanup complete. PID/base are **snapshots**, not reusable constants.
+
+**Interpretation:** cross-process loader parity proven in a separately started, instrumented ARM32 test process on M3. The initial bootstrap still relies on a BKPT symbol compiled into that test target, and its success does not establish an arbitrary-process bootstrap, Bluetooth linker namespace, a recovery procedure for stalled real Bluetooth `dlopen`, or wireless DS3 pairing. Live Bluetooth injection remains NO-GO. Earlier v1/v2 startup failures were not remote-call failures; v3 switched to a persistent ADB foreground target session and target-written PID.
