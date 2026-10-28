@@ -1,0 +1,27 @@
+name: S7-C4C independent ARM32 parity
+on:
+  pull_request:
+    paths:
+      - 'experiments/s7-c4c/**'
+      - '.github/workflows/s7-c4c.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and check ARM32 ELF
+        run: |
+          cd experiments/s7-c4c
+          bash build-sandbox.sh
+          python3 -m unittest discover -s tests -v
+          readelf -d rbxc4c_target | grep -q 'libdl.so'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s7-c4c-arm32-test-only
+          path: |
+            experiments/s7-c4c/rbxc4c_target
+            experiments/s7-c4c/rbxc4c_controller
+            experiments/s7-c4c/libretrobox_c4c_test.so
+            experiments/s7-c4c/target_offsets.h
+          retention-days: 7
