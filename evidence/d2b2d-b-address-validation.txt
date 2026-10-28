@@ -1,0 +1,17 @@
+=== RetroBox D2b-2d-B read-only ARM32 ELF address validation ===
+Bluetooth PID: 669 threads: 48
+ELF source: /apex/com.android.runtime/lib/bionic/libdl.so
+MAP: 0xf3960000-0xf3961000 r--p file-offset=0x0
+MAP: 0xf3961000-0xf3962000 r-xp file-offset=0x0
+MAP: 0xf3962000-0xf3963000 r--p file-offset=0x0
+PT_LOAD: vaddr=0x0 offset=0x0 memsz=0x848 flags=4 align=0x1000
+PT_LOAD: vaddr=0x1848 offset=0x848 memsz=0x218 flags=5 align=0x1000
+PT_LOAD: vaddr=0x2a60 offset=0xa60 memsz=0xcc flags=6 align=0x1000
+PT_LOAD: vaddr=0x4000 offset=0x1000 memsz=0x1000 flags=6 align=0x1000
+DYNAMIC SYMBOL: dlopen st_value=0x1851 thumb_bit=1
+CANDIDATE: executable file offset 0x850 -> PC 0xf3961850 (Thumb state)
+WARNING: candidate is NOT remote execution validation; do not invoke in Bluetooth.
+DYNAMIC SYMBOL: android_dlopen_ext st_value=0x1897 thumb_bit=1
+CANDIDATE: executable file offset 0x896 -> PC 0xf3961896 (Thumb state)
+WARNING: candidate is NOT remote execution validation; do not invoke in Bluetooth.
+PASS: read-only analysis completed. Bluetooth process was not attached.

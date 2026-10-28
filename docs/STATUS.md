@@ -1,0 +1,42 @@
+# M3 status and validation matrix — 2026-10-28
+
+## Hardware / software (measured)
+
+- Android 12, API 31, ARM32 / `armeabi-v7a`; `su` installed at `/system/xbin/su`, root command form `su 0`.
+- Bluetooth process `com.android.bluetooth` (comm `droid.bluetooth`), UID 1002, SELinux domain `u:r:bluetooth:s0`; observed 48–49 threads and permissive mode. PID **changes across restarts** (e.g. 669, 675, 671); never pin a PID or ASLR address.
+- `libbluetooth.so` `/system/lib/libbluetooth.so`, `libbluetooth_jni.so`, Bionic `libdl.so` under `/apex/com.android.runtime/lib/bionic/`, 32-bit linker under `/apex/com.android.runtime/bin/linker`.
+- Bluetooth HAL via `android.hardware.bluetooth@1.0-service`, AIC UART `/dev/ttyAS1`; no kernel `hci0` even though kernel Bluetooth sockets can be opened/bound.
+- Runtime flags show `gd_security=false`, `gd_l2cap=false`, `gd_hci=false` etc; this device uses the **legacy** Fluoride paths relevant to Stage 3C.
+
+## Controller behavior (measured)
+
+- Sony DS3 `054c:0268` USB recognized by Android as GAMEPAD/JOYSTICK (`/dev/input/event3` observed). RetroArch `com.retroarch.ra32` worked in menus with custom Android autoconfig profile (device name `Sony PLAYSTATION(R)3 Controller`).
+- USB `sixpair` set DS3 master to M3 Bluetooth adapter. Pressing PS leads to L2CAP HID Control (`PSM 0x11`) connection attempt and legacy authentication flow.
+- Android responds to PIN Code Request; the 6-byte adapter-address PIN was submitted at HCI level but `Authentication Complete` returned **0x22 / LMP Response Timeout** ~30 seconds later; `BOND_BONDING → BOND_NONE`. No proof of established LinkKey/bond.
+- Generic PIN guessing is not a productive path. HDMI/RetroArch cannot fix authentication in the Bluetooth stack.
+
+## Development tests (actual M3 outputs)
+
+| Stage | Measured result | Scope and limit |
+|---|---|---|
+| Kernel L2CAP stage0–2 | `socket` / `bind` success | Does not prove kernel owns HAL HCI traffic |
+| D2a | `dlopen` / `dlclose` PASS | Own isolated process |
+| D2b-2a, 2b | `ptrace` attach and read/write/restore PASS | Fork-owned child |
+| D2b-2c | Remote `dlopen` and maps PASS | Fork-owned child |
+| D2b-2d-A | Bluetooth leader thread SEIZE/INTERRUPT/DETACH PASS | No register changes/injection |
+| S1 | 4 workers progressed after attach/detach PASS | Owned child |
+| S2 | Remote function returned `42`; 250ms simulated timeout recovery PASS | Owned child, simple function |
+| S3 | Guard pages, scratch canaries, timeout recovery PASS | Parent/child owned mapping |
+| S4 v2 | Remote `mmap2` / `mprotect` / memory checks / `munmap` PASS | Child-owned mapping |
+| S5 | Multi-thread remote `dlopen`, add-on mapped, workers 4/4 PASS | Fork-owned child |
+| S6, S7-A/B | Read-only process/evidence validation PASS | Does not authorize injection |
+| S7-C1 | Remote private scratch + path + `dlopen` + `munmap`; workers 4/4 PASS | Fork-owned child |
+| S7-C3 v3 | ELF/PT_LOAD/Thumb `dlopen` resolver PASS | Read-only Bluetooth PID |
+| S7-C3b/c | Identity/thread checks PASS; recovery state-machine locally tested | Real linker recovery untested |
+| S7-C3d | 450ms constructor delay PASS; 3500ms stalled constructor quarantined | Owned process, not a mutex proof |
+| S7-C3e v2 | B finished before A constructor in both cases; normal and timeout policy PASS | Owned process; does not prove absence of linker locks |
+| S7-C4A v2 | Add-on SHA-256 matches staged bytes; PID unchanged PASS | Add-on staged, **not loaded** |
+| S7-C4B | Read-only integrated resolver/checksum PASS; `inspection_issues=[]` | `addon.mapped=false`, `injection_authorized=false` |
+| S7-C4C | **NOT IMPLEMENTED** | No target-specific safe execution/return/recovery |
+
+Raw results shared by operator are authoritative over README files written before each M3 test. `evidence/` contains selected audit JSON snapshots, not the full raw logs.

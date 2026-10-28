@@ -1,0 +1,15 @@
+{
+  "bluetooth_injection_authorized": false,
+  "issues": [],
+  "mode": "READ_ONLY",
+  "persistent_blockers": [
+    "No safe proof that injected dlopen can recover from linker-lock contention",
+    "Bluetooth linker namespace acceptance untested",
+    "Actual remote mmap/dlopen lifecycle in Bluetooth not validated"
+  ],
+  "pid": 675,
+  "stage": "S7-C3b/c",
+  "thread_count": 48,
+  "tracerpid": "0",
+  "uid": "1002"
+}

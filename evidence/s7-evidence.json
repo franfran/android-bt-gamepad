@@ -1,0 +1,129 @@
+{
+  "blockers": [
+    "No audited target-owned remote mmap/munmap lifecycle integrated into Bluetooth loader",
+    "No demonstrated safe recovery from linker-lock contention in Bluetooth process",
+    "No demonstrated namespace acceptance for injected addon in Bluetooth process",
+    "No independently validated failure recovery following interrupted remote dlopen"
+  ],
+  "checks": {
+    "library_mappings": {
+      "/bin/linker": [
+        {
+          "end": "0xeda84000",
+          "file_offset": "0x0",
+          "path": "/apex/com.android.runtime/bin/linker",
+          "perms": "r--p",
+          "start": "0xeda68000"
+        },
+        {
+          "end": "0xedb2a000",
+          "file_offset": "0x1b000",
+          "path": "/apex/com.android.runtime/bin/linker",
+          "perms": "r-xp",
+          "start": "0xeda84000"
+        },
+        {
+          "end": "0xedb2f000",
+          "file_offset": "0xc0000",
+          "path": "/apex/com.android.runtime/bin/linker",
+          "perms": "r--p",
+          "start": "0xedb2a000"
+        },
+        {
+          "end": "0xedb31000",
+          "file_offset": "0xc4000",
+          "path": "/apex/com.android.runtime/bin/linker",
+          "perms": "rw-p",
+          "start": "0xedb2f000"
+        }
+      ],
+      "/libbluetooth.so": [
+        {
+          "end": "0xbede7000",
+          "file_offset": "0x0",
+          "path": "/system/lib/libbluetooth.so",
+          "perms": "r--p",
+          "start": "0xbeccd000"
+        },
+        {
+          "end": "0xbf2af000",
+          "file_offset": "0x119000",
+          "path": "/system/lib/libbluetooth.so",
+          "perms": "r-xp",
+          "start": "0xbede7000"
+        },
+        {
+          "end": "0xbf2cd000",
+          "file_offset": "0x5e0000",
+          "path": "/system/lib/libbluetooth.so",
+          "perms": "r--p",
+          "start": "0xbf2af000"
+        },
+        {
+          "end": "0xbf2cf000",
+          "file_offset": "0x5fd000",
+          "path": "/system/lib/libbluetooth.so",
+          "perms": "rw-p",
+          "start": "0xbf2cd000"
+        }
+      ],
+      "/libc.so": [
+        {
+          "end": "0xec4cb000",
+          "file_offset": "0x0",
+          "path": "/apex/com.android.runtime/lib/bionic/libc.so",
+          "perms": "r--p",
+          "start": "0xec49f000"
+        },
+        {
+          "end": "0xec553000",
+          "file_offset": "0x2b000",
+          "path": "/apex/com.android.runtime/lib/bionic/libc.so",
+          "perms": "r-xp",
+          "start": "0xec4cb000"
+        },
+        {
+          "end": "0xec558000",
+          "file_offset": "0xb2000",
+          "path": "/apex/com.android.runtime/lib/bionic/libc.so",
+          "perms": "r--p",
+          "start": "0xec553000"
+        },
+        {
+          "end": "0xec55a000",
+          "file_offset": "0xb6000",
+          "path": "/apex/com.android.runtime/lib/bionic/libc.so",
+          "perms": "rw-p",
+          "start": "0xec558000"
+        }
+      ],
+      "/libdl.so": [
+        {
+          "end": "0xead31000",
+          "file_offset": "0x0",
+          "path": "/apex/com.android.runtime/lib/bionic/libdl.so",
+          "perms": "r--p",
+          "start": "0xead30000"
+        },
+        {
+          "end": "0xead32000",
+          "file_offset": "0x0",
+          "path": "/apex/com.android.runtime/lib/bionic/libdl.so",
+          "perms": "r-xp",
+          "start": "0xead31000"
+        },
+        {
+          "end": "0xead33000",
+          "file_offset": "0x0",
+          "path": "/apex/com.android.runtime/lib/bionic/libdl.so",
+          "perms": "r--p",
+          "start": "0xead32000"
+        }
+      ]
+    },
+    "pid": 675,
+    "threads": 48
+  },
+  "injection_authorized": false,
+  "version": "s7-ab-v1"
+}
