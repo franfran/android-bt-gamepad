@@ -1,6 +1,6 @@
 # S7-C4C — Bluetooth process execution loader: detailed handover
 
-**Status:** design and prerequisites available; **target-specific live loader not implemented**. This file is the continuation entry point for a new conversation/agent.
+**Status (2026-10-28):** S7-C4C-1/2 independently started ARM32 **test-target loader PASS on M3** (PR #3). Actual Bluetooth-specific execution loader and independent recovery are NOT implemented; live Bluetooth injection remains NO-GO. This file is the continuation entry point for a new conversation/agent.
 
 ## Objective
 
@@ -48,3 +48,11 @@ BlueZ works through Linux's own Bluetooth management path. M3 owns the controlle
 ## Working constraints
 
 Mac lacks Android NDK. Sandboxed prebuilt ARM32 artifacts have been used; include reproducible Clang/LLD build recipes when possible. `su 0` works (`su -c` doesn't). ADB serial must be supplied explicitly. Store PRs/reviews in GitHub so context survives chat resets.
+
+## Latest test-target breakthrough: S7-C4C-1/2 (M3 measured, 2026-10-28)
+
+Code: `experiments/s7-c4c/` in [PR #3](https://github.com/franfran/android-bt-gamepad/pull/3). Unlike S7-C1, tracer and 48-worker target are started as separate processes, with a persistent ADB session keeping the target alive. The target writes its own PID; controller dynamically resolves target ELF symbol RVAs using its `/proc/PID/maps` mapping. Tested on M3: target-private `mmap2` (4 pages: guard/RW/RX/guard), executable return-trampoline protection and validation, missing module `dlopen` → NULL + nonempty `dlerror`, successful inert module `dlopen` and mapping, scratch canaries, background worker progression, remote `munmap`, test-only process cleanup. Operator terminal ended `S7-C4C-1/2 INDEPENDENT TARGET = PASS (NOT Bluetooth authorization)`.
+
+**Critical limitation:** The very first remote call returns through `rbxc4c_return_trap`, specially compiled into the test target. Later remote calls use a target-private RX return trampoline. Actual `com.android.bluetooth` has **no built-in test trap**. A target-independent, ARM/Thumb-safe bootstrap plus independently verified service recovery/namespace behavior is still required. No remote `dlopen` was performed on Bluetooth. This is a real target-specific parity milestone, not proof of safe production injection.
+
+Next work: investigate a **target-independent bootstrap** in a similarly independently started non-Bluetooth test process (without its precompiled return-trap), then separately assess linker namespace and an out-of-band service recovery procedure; avoid claiming register restoration unblocks a stuck linker. Do not reuse the retired `bt_inert_inject` tool.
