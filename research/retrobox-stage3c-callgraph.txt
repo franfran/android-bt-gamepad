@@ -1,0 +1,83 @@
+
+FUNCTION _Z13hidh_conn_regv: 0x27e748 size=232
+  0x27e79c bl  0x281368 -> _Z14L2CA_Register2tRK16tL2CAP_APPL_INFObP16tL2CAP_ERTM_INFOttt
+  0x27e7b2 bl  0x281368 -> _Z14L2CA_Register2tRK16tL2CAP_APPL_INFObP16tL2CAP_ERTM_INFOttt
+  0x27e7fe bl  0x281638 -> _Z15L2CA_Deregistert
+  0x27e810 bl  0x2c07c8 -> LogMsg
+
+FUNCTION _ZL22hidh_l2cif_connect_indRK10RawAddresstth: 0x27ee28 size=720
+  0x27ee66 bl  0x2c07c8 -> LogMsg
+  0x27ee74 bl  0x27e3c8 -> _Z14HID_HostAddDevRK10RawAddresstPh
+  0x27ee7c bl  0x282b18 -> _Z18L2CA_DisconnectReqt
+  0x27ee90 blx 0x5dee60 -> unresolved
+  0x27eebe blx 0x5deea0 -> unresolved
+  0x27eef8 bl  0x27fc08 -> _ZN8hid_conn10state_textERK15tHID_CONN_STATE
+  0x27ef1e blx 0x5df050 -> unresolved
+  0x27ef2e bl  0x24d5b0 -> _Z14BTM_LogHistoryRKNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEERK10RawAddressS7_S7_
+  0x27ef86 bl  0x2c07c8 -> LogMsg
+  0x27f00a blx 0x5deea0 -> unresolved
+  0x27f046 bl  0x24d5b0 -> _Z14BTM_LogHistoryRKNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEERK10RawAddressS7_S7_
+  0x27f072 blx 0x5dee90 -> unresolved
+  0x27f08c bl  0x2c07c8 -> LogMsg
+  0x27f0b6 bl  0x2c07c8 -> LogMsg
+  0x27f0be blx 0x5dee70 -> unresolved
+
+FUNCTION _Z25btm_sec_mx_access_requestRK10RawAddressbtPFvPS0_hPvhES3_: 0x2590a8 size=1904
+  0x2590d2 bl  0x2eff7e -> _ZN9bluetooth4shim18is_gd_shim_enabledEv
+  0x2590e2 bl  0x2cf5c2 -> _ZN9bluetooth4shim25btm_sec_mx_access_requestERK10RawAddressbtPFvPS2_hPvhES5_
+  0x2590ee bl  0x24a41c -> _Z21btm_find_or_alloc_devRK10RawAddress
+  0x25913a bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x2591a4 bl  0x172f70 -> _Z24controller_get_interfacev
+  0x2591e8 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x259214 bl  0x12532c -> _Z7logboolb
+  0x259228 bl  0x12532c -> _Z7logboolb
+  0x25925e bl  0x5dd460 -> unresolved
+  0x2592dc bl  0x257c04 -> _Z25btm_sec_execute_procedureP16tBTM_SEC_DEV_REC
+  0x25930e bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x25934a bl  0x3aeffc -> unresolved
+  0x259358 blx 0x5df090 -> unresolved
+  0x25936c bl  0x124f74 -> _Z15btm_status_textRKh
+  0x2593a2 bl  0x5dd460 -> unresolved
+  0x259404 bl  0x5dd460 -> unresolved
+  0x259512 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x259550 bl  0x5dd460 -> unresolved
+  0x259558 bl  0x258d50 -> _ZL21btm_sec_check_upgradeP16tBTM_SEC_DEV_RECb
+  0x2595d6 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x25960c bl  0x5dd460 -> unresolved
+  0x259622 bl  0x2b280c -> _Z10osi_mallocj
+  0x25966c bl  0x2c07c8 -> LogMsg
+  0x259678 bl  0x2b4280 -> _Z19fixed_queue_enqueueP13fixed_queue_tPv
+  0x25969a blx 0x5dee60 -> unresolved
+  0x2596c2 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x2596fe bl  0x5dd460 -> unresolved
+  0x259742 bl  0x2c07c8 -> LogMsg
+  0x2597b4 bl  0x2c07c8 -> LogMsg
+  0x2597c4 blx 0x5dee70 -> unresolved
+
+FUNCTION _ZN9bluetooth4shim25btm_sec_mx_access_requestERK10RawAddressbtPFvPS2_hPvhES5_: 0x2cf5c2 size=22
+
+FUNCTION _Z39btm_sec_l2cap_access_req_by_requirementRK10RawAddresstbPFvPS0_hPvhES3_: 0x258734 size=1564
+  0x258780 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x2587b6 bl  0x3aeffc -> unresolved
+  0x2587c4 blx 0x5df090 -> unresolved
+  0x2587d6 bl  0x12532c -> _Z7logboolb
+  0x258810 bl  0x5dd460 -> unresolved
+  0x258836 bl  0x24a41c -> _Z21btm_find_or_alloc_devRK10RawAddress
+  0x258840 bl  0x233c30 -> _Z20BTM_GetHCIConnHandleRK10RawAddressh
+  0x258852 bl  0x172f70 -> _Z24controller_get_interfacev
+  0x2588a4 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x2588ea bl  0x5dd460 -> unresolved
+  0x2589b0 bl  0x11f60c -> _ZNSt3__112__hash_tableINS_17__hash_value_typeINS_12basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEEbEENS_22__unordered_map_hasherIS7_S8_NS_4hashIS7_EELb1EEENS_21__unordered_map_equalIS7_S8_NS_8equal_toIS7_EELb1EEENS5_IS8_EEE4findIS7_EENS_15__hash_iteratorIPNS_11__hash_nodeIS8_PvEEEERKT_
+  0x258a00 bl  0x5dd460 -> unresolved
+  0x258a1e bl  0x12532c -> _Z7logboolb
+  0x258a4c bl  0x5dd460 -> unresolved
+  0x258af0 bl  0x2c07c8 -> LogMsg
+  0x258b24 bl  0x2c07c8 -> LogMsg
+  0x258b54 bl  0x258d50 -> _ZL21btm_sec_check_upgradeP16tBTM_SEC_DEV_RECb
+  0x258b5a bl  0x257c04 -> _Z25btm_sec_execute_procedureP16tBTM_SEC_DEV_REC
+  0x258b88 bl  0x2c07c8 -> LogMsg
+  0x258bb8 bl  0x5dd460 -> unresolved
+  0x258c40 bl  0x2c07c8 -> LogMsg
+  0x258cb4 bl  0x2c07c8 -> LogMsg
+  0x258ce2 blx 0x5dee60 -> unresolved
+  0x258cea blx 0x5dee70 -> unresolved
