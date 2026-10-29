@@ -77,3 +77,31 @@ exit code, so linker/ptrace failures are visible rather than being swallowed.
 **M3 PASS**: operator verified independent foreground ADB target session alive, 48 workers ready, load-bias resolution, target-private remote `mmap2`, RX return trampoline, negative `dlopen` + `dlerror`, inert module mapped, canaries intact, workers progressed, remote `munmap`, return via test-target image bootstrap and test-only cleanup. The target was independently launched, not forked by tracer. See `docs/STATUS.md` for exact measured assertions. Earlier v1/v2 startup gating failures are superseded by this v3 result.
 
 **Scope guard:** the initial BKPT bootstrap is built into this test target. Bluetooth has no matching test stub. M3 PASS does **not** authorize real Bluetooth injection, prove its linker namespace, guarantee safe rollback, or repair DS3 wireless pairing.
+
+## Next experimental branch: target-independent SVC bootstrap (UNTESTED)
+
+In `feat/s7-c4c-svc-bootstrap-test` (stacked on PR #3), `controller.c` no
+longer uses the target's compiled `rbxc4c_return_trap`, `rbxc4c_mmap2`,
+`rbxc4c_mprotect` or `rbxc4c_munmap` symbols. Instead it finds an
+already-existing ARM-state `svc #0` word inside the **test target's** executable
+mapping, saves the leader's registers, and uses `PTRACE_SYSCALL` with
+`PTRACE_O_TRACESYSGOOD` to observe syscall entry and exit. This lets the
+test controller allocate, protect, and release the private mapping without
+patching the target image or returning through an in-image BKPT symbol.
+Ordinary `dlopen`/ `dlerror` calls still return through the verified private
+RX trampoline; their test wrappers remain deliberately target-specific.
+
+**No hardware validation yet for this new bootstrap.** PR #3's M3 PASS only
+covers the previous controller revision. The test executable continues to
+contain unused legacy test helpers for ABI/parity comparison; the new controller
+does not reference them. The first M3 run must separately verify tagged
+entry/exit stops, address/ARM state, scratch cleanup, signal handling and
+worker progress. If any stop is non-syscall or ambiguous, kill only the verified
+test target; never resume an uncertain remote call. A kernel/signal stop that
+cannot be classified reliably is a FAIL, not an excuse to disable tagging.
+
+No CLI accepting PID or library path is added. This is NOT an authorization
+or mechanism to load code into `com.android.bluetooth`. Android Bluetooth
+linker namespace and independent service recovery are still NO-GO. Rebuild
+in CI via `build-sandbox.sh`, then use the fixed M3 test-only runner *only*
+with owner-controlled test process and explicit ADB serial.
