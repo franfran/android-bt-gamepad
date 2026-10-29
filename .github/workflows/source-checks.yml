@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for stage in s7-ab s7-c3-resolver s7-c3-recovery s7-c4a s7-c4b s8-bt-auth s8-security-contract s8-veneer; do
+          for stage in s7-ab s7-c3-resolver s7-c3-recovery s7-c4a s7-c4b s8-bt-auth s8-security-contract s8-veneer s8-hid-callback; do
             echo "::group::${stage}"
             ( cd "experiments/${stage}" && python3 -m unittest discover -v )
             echo "::endgroup::"
