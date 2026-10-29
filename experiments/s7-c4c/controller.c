@@ -10,6 +10,13 @@
 typedef unsigned int u32;
 typedef int i32;
 #include "target_offsets.h"
+#ifndef RBXC4C_FAULT_CASE
+#define RBXC4C_FAULT_CASE 0
+#endif
+#if RBXC4C_FAULT_CASE < 0 || RBXC4C_FAULT_CASE > 2
+#error Invalid test-only fault case
+#endif
+/* 0 normal, 1 SIGUSR1, 2 nonreturning spin. Fixed at CI build time. */
 #define DIR "/data/local/tmp/retrobox_s7c4c_test/"
 #define PIDFILE DIR "target.pid"
 #define LIBRARY DIR "libretrobox_c4c_test.so"
@@ -30,6 +37,7 @@ typedef int i32;
 #define SYSCALL_STOP (SIGTRAP|0x80)
 #define SIGTRAP 5
 #define SIGKILL 9
+#define SIGUSR1 10
 #define WNOHANG 1
 #define WALL 0x40000000
 #define WSTOPSIG(s) (((s)>>8)&255)
@@ -136,15 +144,18 @@ static int remote_syscall(int pid,const struct regs*orig,u32 site,int nr,
 }
 /* Return only after verified SIGTRAP AND PC at expected target trap.
  * NEVER resume a stalled/indeterminate call in this demo. Test-target kill only. */
+static int last_call_signal=0;
 static int remote_call(int pid,const struct regs*orig,u32 fn,u32 trap,const u32 args[6],int timeout,u32*result){
- struct regs r,stop;int status;copyregs(&r,orig);
+ struct regs r,stop;int status;last_call_signal=0;copyregs(&r,orig);
  for(int i=0;i<6;i++)r.r[i]=args[i];
  r.r[14]=trap;r.r[15]=fn&~1u;r.r[16]=(r.r[16]&~0x20u)|((fn&1u)?0x20u:0);r.r[17]=0xffffffffu;
  if(sc4(PTRACE,SETREGS,pid,0,(int)&r)<0)return -1;
  if(sc4(PTRACE,CONT,pid,0,0)<0)return -1;
  int w=waitstop(pid,timeout,&status);
- if(w!=1)return -2; /* Indeterminate; do NOT detach and resume */
- if(WSTOPSIG(status)!=SIGTRAP||sc4(PTRACE,GETREGS,pid,0,(int)&stop)<0)return -3;
+ if(w==0)return -2; /* Bounded timeout; DO NOT detach and resume. */
+ if(w!=1)return -9; /* Exited/unclassified wait is NOT a timeout pass. */
+ last_call_signal=WSTOPSIG(status);
+ if(last_call_signal!=SIGTRAP||sc4(PTRACE,GETREGS,pid,0,(int)&stop)<0)return -3;
  if(!(stop.r[15]>=trap&&stop.r[15]<=trap+4))return -4;
  *result=stop.r[0];
  if(sc4(PTRACE,SETREGS,pid,0,(int)orig)<0)return -5;
@@ -179,7 +190,7 @@ static int run(void){
   output("FAIL CLOSED: target load function not executable / invalid PIE address\n");return 2;
  }
  output("TARGET_IDENTITY_CONFIRMED; load_bias=");hex(base);output("\n");
- int attached=0,stopped=0,status=0;u32 scratch=0;int fail=1,phase=0;struct regs orig;
+ int attached=0,stopped=0,status=0;u32 scratch=0;int fail=1,phase=0,expected_fault=0;struct regs orig;
  if(sc4(PTRACE,ATTACH,pid,0,0)<0){output("FAIL: attach\n");return 2;}
  attached=1;
  if(waitstop(pid,1500,&status)!=1){output("FAIL: attach wait\n");goto done;}
@@ -212,6 +223,33 @@ static int run(void){
  u32 trap=scratch+PAGE*2;
  if(!address_exec(pid,trap)){output("FAIL: RX trap not executable\n");goto done;}
  output("TARGET-OWNED RX RETURN TRAMPOLINE VERIFIED\n");
+#if RBXC4C_FAULT_CASE != 0
+ /* No dlopen in fault variants: only the fixed test function is invoked.
+  * Any unexpected classification fails; attached target is quarantined.
+  * Keeping normal and negative fault paths in different binaries prevents
+  * accidental retry of a hung/signal-interrupted test invocation. */
+#if RBXC4C_FAULT_CASE == 1
+ u32 faultfn=base+OFF_RBXC4C_FAULT_SIGNAL;
+#else
+ u32 faultfn=base+OFF_RBXC4C_FAULT_SPIN;
+#endif
+ if(!address_exec(pid,faultfn)){output("FAULT PROBE: function not executable\n");goto done;}
+ u32 faultargs[6]={0,0,0,0,0,0},faultresult=0;
+ phase=2;
+ int fault_rc=remote_call(pid,&orig,faultfn,trap,faultargs,400,&faultresult);
+#if RBXC4C_FAULT_CASE == 1
+ if(fault_rc==-3 && last_call_signal==SIGUSR1){
+  output("EXPECTED SIGNAL: SIGUSR1 DELIVERY STOP REJECTED; NO RESUME OR RETRY\n");
+  expected_fault=1;
+ }else output("FAIL CLOSED: SIGUSR1 fault classification mismatch\n");
+#else
+ if(fault_rc==-2 && last_call_signal==0){
+  output("EXPECTED TIMEOUT: NONRETURNING TEST CALL QUARANTINED; NO RESUME OR RETRY\n");
+  expected_fault=1;
+ }else output("FAIL CLOSED: timeout fault classification mismatch\n");
+#endif
+ goto done;
+#endif
  const u32 ca=0x52424331u,cb=0x52424332u;
  u32 data=scratch+PAGE;
  if(!poke(pid,data,ca)||!poke(pid,data+4,cb))goto done;
@@ -253,13 +291,16 @@ static int run(void){
  output("PASS: non-fork independent ARM32 target call, RX trampoline, dlopen negative/positive, cleanup\n");
  fail=0;
  done:
- if(fail){
+ if(fail || expected_fault){
    output(phase>=2?"STATE=QUARANTINE; SAFE_TO_RETRY=false\n":"STATE=PRECALL_FAILURE; SAFE_TO_RETRY=false\n");
    /* Only our independently launched *test* process can be terminated.
     * Never leave a traced target that may be midway through linker call.
     * The wrapper also performs a scoped cleanup if this controller exits. */
-   if(attached){sc2(37,pid,SIGKILL);output("SCOPED TEST TARGET SIGKILL REQUESTED\n");}
+   if(attached){
+     if(sc2(37,pid,SIGKILL)<0){output("FAIL: scoped test kill request rejected\n");expected_fault=0;}
+     else output("SCOPED TEST TARGET SIGKILL REQUESTED\n");
+   }else expected_fault=0;
  }
- return fail?3:0;
+ return expected_fault?0:(fail?3:0);
 }
 __attribute__((noreturn)) void _start(void){int r=run();quit(r);}
