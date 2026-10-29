@@ -104,3 +104,19 @@ linker lock safety. Verify Bluetooth's linker namespace without executing
 an unchecked library in the live process. Owner review is required for
 future safety gates, and **live Bluetooth remains NO-GO**. No automated
 production injection, no global Bluetooth auth policy changes.
+
+## PR #5 planned fault-path qualification (pending hardware)
+
+A further **test-only** stacked branch `feat/s7-c4c-fault-path-test`
+adds two separate fixed controller variants using the PR #4 independent
+test target. `--fault-case signal` requests an expected SIGUSR1 delivery
+stop from a compiled test helper; `--fault-case timeout` enters a compiled
+nonreturning loop and checks the bounded wait. Both must classify an
+interrupted remote call as `QUARANTINE`, must never retry/resume it, and
+must request SIGKILL only for the verified, owned test target. The normal
+PR #4 branch remains intact.
+
+This intentionally tests **classification and scoped termination only**,
+not restoration of a hung Bionic linker, not a clean service restart, and
+not Android Bluetooth linker namespace acceptance. CI/hardware results must
+be appended only after actual evidence. Live Bluetooth continues NO-GO.
