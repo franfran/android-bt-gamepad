@@ -109,6 +109,32 @@ class RunnerTests(unittest.TestCase):
             runner.cleanup('adb', {41})
             self.assertEqual(root.call_args_list, [call('adb', 'rm -rf ' + runner.REMOTE)])
 
+    def test_cleanup_fails_closed_if_test_target_survives(self):
+        with patch.object(runner, 'pidof_candidates', return_value=[55]), \
+             patch.object(runner, 'is_owned_target', return_value=True), \
+             patch.object(runner, 'root') as root, \
+             patch.object(runner.time, 'monotonic', side_effect=[0, 4]):
+            self.assertFalse(runner.cleanup('dev', {55}))
+            root.assert_any_call('dev', 'kill -9 55')
+            self.assertNotIn(call('dev', 'rm -rf ' + runner.REMOTE),
+                             root.call_args_list)
+
+    def test_expected_fault_does_not_pass_if_cleanup_is_unverified(self):
+        session = Mock()
+        session.poll.return_value = None
+        with patch.object(runner, 'adb'), \
+             patch.object(runner, 'pidof_candidates', return_value=[]), \
+             patch.object(runner, 'launch_foreground_session', return_value=session), \
+             patch.object(runner, 'await_own_pid', return_value=88), \
+             patch.object(runner, 'find_target', return_value=88), \
+             patch.object(runner, 'run_controller', return_value='\n'.join(
+                 runner.SUCCESS_MARKERS['timeout'])) as ctl, \
+             patch.object(runner, 'cleanup', return_value=False), \
+             patch.object(runner, 'stop_host_session'), \
+             patch.object(Path, 'is_file', return_value=True):
+            self.assertEqual(runner.run('dev', 'timeout'), 2)
+            ctl.assert_called_once_with('dev', 'timeout')
+
     def test_cleanup_kills_only_validated_target(self):
         with patch.object(runner, 'pidof_candidates', return_value=[]), \
              patch.object(runner, 'is_owned_target', side_effect=lambda _,p:p==55), \
