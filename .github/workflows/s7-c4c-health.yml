@@ -1,0 +1,16 @@
+name: S7-C4C-3 read-only health checker
+on:
+  pull_request:
+    paths:
+      - 'experiments/s7-c4c-health/**'
+      - '.github/workflows/s7-c4c-health.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python 3.8 compatible syntax and unit tests
+        run: |
+          python3 -m py_compile experiments/s7-c4c-health/read-only-health.py
+          python3 -m unittest discover -s experiments/s7-c4c-health/tests -v

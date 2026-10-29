@@ -159,3 +159,7 @@ ordering, Bluetooth-specific linker namespace acceptance, safe intervention
 in other Bluetooth threads, or DS3 wireless pairing. Fault cases call only
 compiled test functions, **not** `dlopen`. Bluetooth injection remains
 **NO-GO**, pending separate operator-reviewed risk assessment/recovery plan.
+
+## C4C-3 read-only Bluetooth health baseline (owner-operated M3, 2026-10-28)
+
+Using `experiments/s7-c4c-health/read-only-health.py` over the owner's existing Wi-Fi ADB connection, the owner provided sanitized JSON: `identity_verified=true`, `uid_match=true`, `threads=48`, `tracer_absent=true`, `libbluetooth_mapped=true`, `bionic_runtime_mapped=true`, `linker_mapping_seen=true`, and `addon_mapped=false`. The tool returned `linker_namespace_acceptance=UNVERIFIED`, `independent_recovery=UNVERIFIED` and `injection_authorized=false`. This was an observation only, with **no Bluetooth attach, injection or service restart**. The transport used successfully for observation is Wi-Fi ADB; survivability of that transport during a Bluetooth service hang has not been tested. C4C-3 remains **NO-GO**.
