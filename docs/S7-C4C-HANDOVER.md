@@ -161,3 +161,7 @@ differences. No automatic service termination or live injection.
 Only after an explicit owner-reviewed GO/NO-GO assessment may any further
 production experiment be considered. Keep PR #5 as reviewable test-only
 evidence; it is not a production authorization.
+
+## C4C-3 formal safety gate (2026-10-28)
+
+See [S7-C4C-3-HAZARD-ASSESSMENT.md](S7-C4C-3-HAZARD-ASSESSMENT.md) and [Issue #6](https://github.com/franfran/android-bt-gamepad/issues/6). Read-only risk matrix, missing namespace evidence, thread/linker concurrency hazards, independent wired recovery requirements and explicit no-go conditions are documented. **NO-GO is the current decision**, not a statement that an M3 production trial failed. No service restart or Bluetooth injection has been executed for this review. Future evidence must be refreshed and classified as measured/inferred/unverified.
