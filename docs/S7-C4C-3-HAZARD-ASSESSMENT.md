@@ -63,3 +63,7 @@ Evidence to record: observation timestamp, whether an independent transport was 
 **C4C-3 decision as of 2026-10-28: NO-GO.** We can now classify normal test-target execution, unexpected SIGUSR1 and deterministic nonreturning-call timeout. We **cannot** infer Bluetooth service recovery, namespace acceptance, production-safe call/return semantics or DS3 wireless pairing. The next useful step is owner-reviewed **read-only evidence + independent wired recovery control**, not injection.
 
 A future C4C-4 trial would require separate written owner consent and a reviewed, target-specific one-shot plan. No implicit authorization follows from a passing CI run or a test target's successful `dlopen`.
+
+## Read-only operator baseline (2026-10-28)
+
+The owner executed the fixed `experiments/s7-c4c-health/read-only-health.py` on M3 through existing Wi-Fi ADB and supplied sanitized JSON. Verified: Bluetooth process identity, UID 1002 match, 48 threads, no tracer, mapped `libbluetooth.so`, Bionic runtime/linker mapping present, RetroBox add-on not mapped. **No PID, MAC, full mappings, local IP or raw logs are included here.** This establishes a useful undisturbed-process health baseline, **not** a transport failover/recovery exercise. The tool correctly reports `linker_namespace_acceptance=UNVERIFIED`, `independent_recovery=UNVERIFIED`, `injection_authorized=false`. Live execution stays NO-GO.
