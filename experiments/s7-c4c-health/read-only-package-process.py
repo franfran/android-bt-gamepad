@@ -45,6 +45,19 @@ def package_uid(raw):
         raise ValueError("package_uid_format")
     return int(match.group(1))
 
+def lookup_uid(serial):
+    # Some OEMs expose package UID only to root or via cmd package.
+    # Read-only, fixed commands; never publish raw command responses.
+    for command, root in (("pm list packages -U com.android.bluetooth", False),
+                          ("cmd package list packages -U com.android.bluetooth", False),
+                          ("cmd package list packages -U com.android.bluetooth", True)):
+        try:
+            return package_uid(read(serial, command, root))
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired):
+            continue
+    raise RuntimeError("package_uid_unavailable")
+
+
 def cmdline_category(raw):
     # The cmdline is private. Only exact package-name evidence is reported.
     first = raw.split(b"\x00", 1)[0]
@@ -70,7 +83,7 @@ def collect(serial):
     if status1["Pid"] != int(first) or status1["Uid"] != 1002 or status1["TracerPid"] != 0 or comm != "droid.bluetooth":
         raise RuntimeError("stage_identity")
     name = safe_step("cmdline", lambda: cmdline_category(read(serial, "cat /proc/" + first + "/cmdline", True)))
-    uid = safe_step("package_uid", lambda: package_uid(read(serial, "pm list packages -U com.android.bluetooth")))
+    uid = safe_step("package_uid", lambda: lookup_uid(serial))
     status2 = safe_step("revalidation", lambda: parse_status(read(serial, "cat /proc/" + first + "/status", True)))
     last = safe_step("revalidation", lambda: parse_pid(read(serial, "pidof com.android.bluetooth", True)))
     if last != first or status1 != status2:
