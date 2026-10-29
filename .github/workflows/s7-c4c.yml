@@ -18,12 +18,18 @@ jobs:
           readelf -d rbxc4c_target | grep -q 'libdl.so'
           test -f run-on-m3.py
           python3 -m py_compile run-on-m3.py
+          test -f rbxc4c_controller_signal
+          test -f rbxc4c_controller_timeout
+          readelf -h rbxc4c_controller_signal | grep -q 'Machine: *ARM'
+          readelf -h rbxc4c_controller_timeout | grep -q 'Machine: *ARM'
       - uses: actions/upload-artifact@v4
         with:
           name: s7-c4c-arm32-test-only
           path: |
             experiments/s7-c4c/rbxc4c_target
             experiments/s7-c4c/rbxc4c_controller
+            experiments/s7-c4c/rbxc4c_controller_signal
+            experiments/s7-c4c/rbxc4c_controller_timeout
             experiments/s7-c4c/libretrobox_c4c_test.so
             experiments/s7-c4c/target_offsets.h
             experiments/s7-c4c/run-on-m3.py
