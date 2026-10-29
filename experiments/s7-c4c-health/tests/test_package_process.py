@@ -51,7 +51,7 @@ class Tests(unittest.TestCase):
         x=self.sample()
         x[-1]=b"672"
         with patch.object(mod,"read",side_effect=x):
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(RuntimeError,"stage_revalidation"):
                 mod.collect("serial")
 
     def test_package_uid_stage_redacted(self):
