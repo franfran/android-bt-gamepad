@@ -35,15 +35,21 @@ def parse_status(raw):
     return values
 
 def package_uid(raw):
-    text = raw.decode("utf-8", "replace").replace("\r", "")
+    text = raw.decode("utf-8", "replace").replace("\\r", "")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    pattern = r"package:com\.android\.bluetooth\s+uid:(\d+)"
-    if len(lines) != 1:
+    if not lines or len(lines) > 128:
         raise ValueError("package_uid_format")
-    match = re.fullmatch(pattern, lines[0])
-    if not match:
+    matches = []
+    for line in lines:
+        match = re.fullmatch(r"package:([A-Za-z0-9_.]+)\\s+uid:(\\d+)", line)
+        if not match:
+            raise ValueError("package_uid_format")
+        if match.group(1) == PACKAGE:
+            matches.append(int(match.group(2)))
+    if len(matches) != 1:
         raise ValueError("package_uid_format")
-    return int(match.group(1))
+    return matches[0]
+
 
 def lookup_uid(serial):
     # Keep diagnostics as fixed categories, never raw PM output or stderr.
