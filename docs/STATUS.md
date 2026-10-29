@@ -39,6 +39,7 @@
 | S7-C4B | Read-only integrated resolver/checksum PASS; `inspection_issues=[]` | `addon.mapped=false`, `injection_authorized=false` |
 | S7-C4C-1/2 v3 (PR #3) | **M3 PASS (2026-10-28)** | Separately started 48-worker test target, target-private mmap/guard/RW/RX trampoline, negative/positive dlopen, remote dlerror, canaries, worker progression, munmap; bootstrap uses test-target compiled trap only |
 | S7-C4C SVC bootstrap (PR #4) | **M3 normal-path PASS (2026-10-28)** | Independent 48-worker test target; ARM SVC syscall-stop bootstrap, guard/RW/RX scratch, positive/negative test dlopen/dlerror, worker progress, munmap, cleanup; signals/timeouts untested; Bluetooth NO-GO |
+| S7-C4C signal / timeout (PR #5) | **M3 fault-path PASS (2026-10-28)** | Two independently started, instrumented test targets; expected SIGUSR1 delivery stop and bounded nonreturning-call timeout; both quarantined, no retry, scoped kill requested, runner verified cleanup. Neither exercised `dlopen`; production recovery untested |
 
 Raw results shared by operator are authoritative over README files written before each M3 test. `evidence/` contains selected audit JSON snapshots, not the full raw logs.
 
@@ -91,3 +92,70 @@ active, arbitrary library namespace in Android Bluetooth, and any actual
 Bluetooth process execution/recovery. SVC site selection is confined to the
 controlled test executable, and `dlopen` still calls test-specific wrapper
 symbols. **Do not promote PR #4's pass to production S7-C4C approval.**
+
+## PR #5: fixed test-target fault-path modes (M3 PASS, 2026-10-28)
+
+The stacked fault-path branch adds **compile-time fixed** `SIGUSR1`
+signal-delivery and nonreturning-function timeout tests, and a runner switch
+(`--fault-case signal|timeout`) for a deliberately independently started
+`rbxc4c_target` only. CI and owner-operated M3 evidence are recorded separately. Both fixed
+fault modes have now returned the expected quarantine result on the M3. These tests do not run `dlopen` during the
+fault, and **cannot prove recovery from a real stalled Android linker**.
+Normal-path PR #4 PASS remains valid independently. Bluetooth remains NO-GO.
+
+**PR #5 CI evidence:** GitHub Actions build `40803809282` on commit
+`158ce094a99365e01f9162ce5adba42cccafd427` compiled all three ARM32
+controller variants and passed **23/23 host tests**, producing eight-file
+artifact `12867485949`. General source safety workflow `40803809204`
+PASS. These are **host checks only**; see the separate hardware evidence below.
+
+## PR #5 — Owner-operated M3 fault-path closeout (measured, 2026-10-28)
+
+The owner ran both **separate** fixed-mode commands from the eight-file artifact
+`12867485949` produced by GitHub Actions run `40803809282`. Both tests
+used `run-on-m3.py` and a separately launched, instrumented `rbxc4c_target`,
+**not** `com.android.bluetooth`.
+
+**Signal mode, measured stdout:**
+
+```text
+TARGET READY: PID=3129, 48 workers, identity verified; ADB session alive
+TARGET_IDENTITY_CONFIRMED; load_bias=0x0dfe7000
+TEST IMAGE ARM SVC BOOTSTRAP SELECTED
+TARGET-PRIVATE MMAP2 OK
+TARGET-OWNED RX RETURN TRAMPOLINE VERIFIED
+EXPECTED SIGNAL: SIGUSR1 DELIVERY STOP REJECTED; NO RESUME OR RETRY
+STATE=QUARANTINE; SAFE_TO_RETRY=false
+SCOPED TEST TARGET SIGKILL REQUESTED
+S7-C4C TEST-ONLY SIGNAL FAULT = EXPECTED QUARANTINE (NOT Bluetooth authorization)
+TEST-ONLY CLEANUP COMPLETE
+```
+
+**Timeout mode, measured stdout:**
+
+```text
+TARGET READY: PID=3255, 48 workers, identity verified; ADB session alive
+TARGET_IDENTITY_CONFIRMED; load_bias=0x09ea5000
+TEST IMAGE ARM SVC BOOTSTRAP SELECTED
+TARGET-PRIVATE MMAP2 OK
+TARGET-OWNED RX RETURN TRAMPOLINE VERIFIED
+EXPECTED TIMEOUT: NONRETURNING TEST CALL QUARANTINED; NO RESUME OR RETRY
+STATE=QUARANTINE; SAFE_TO_RETRY=false
+SCOPED TEST TARGET SIGKILL REQUESTED
+S7-C4C TEST-ONLY TIMEOUT FAULT = EXPECTED QUARANTINE (NOT Bluetooth authorization)
+TEST-ONLY CLEANUP COMPLETE
+```
+
+**Interpretation:** both fixed fault classifications matched expectation, both
+entered quarantine without retry/resume, both requested scoped termination of
+the test-owned process, and the runner reported completed cleanup only after
+checking the test-process identity/disappearance. The original test target
+normal path was already verified independently in PR #4; PR #5 now adds these
+two abnormal paths. PID and load bias are per-run snapshots, never constants.
+
+**Not proved:** recovering an arbitrary blocked `dlopen`, releasing Bionic
+linker locks or restoring a production Bluetooth service, arbitrary signal
+ordering, Bluetooth-specific linker namespace acceptance, safe intervention
+in other Bluetooth threads, or DS3 wireless pairing. Fault cases call only
+compiled test functions, **not** `dlopen`. Bluetooth injection remains
+**NO-GO**, pending separate operator-reviewed risk assessment/recovery plan.

@@ -104,3 +104,60 @@ linker lock safety. Verify Bluetooth's linker namespace without executing
 an unchecked library in the live process. Owner review is required for
 future safety gates, and **live Bluetooth remains NO-GO**. No automated
 production injection, no global Bluetooth auth policy changes.
+
+## PR #5 fault-path qualification (M3 PASS for both fixed test modes)
+
+A further **test-only** stacked branch `feat/s7-c4c-fault-path-test`
+adds two separate fixed controller variants using the PR #4 independent
+test target. `--fault-case signal` requests an expected SIGUSR1 delivery
+stop from a compiled test helper; `--fault-case timeout` enters a compiled
+nonreturning loop and checks the bounded wait. Both must classify an
+interrupted remote call as `QUARANTINE`, must never retry/resume it, and
+must request SIGKILL only for the verified, owned test target. The normal
+PR #4 branch remains intact.
+
+This intentionally tests **classification and scoped termination only**,
+not restoration of a hung Bionic linker, not a clean service restart, and
+not Android Bluetooth linker namespace acceptance. Owner-operated M3 evidence now supports both fixed classifications; this
+remains distinct from any proof of real linker/service recovery. Live Bluetooth
+continues NO-GO.
+
+**Source/CI qualified (PR #5):** Actions `40803809282` built three ARM32
+controllers and ran **23/23 host tests PASS**; artifact `12867485949`
+includes the runner and both fixed fault-mode binaries. General source
+safety workflow `40803809204` PASS. **Both M3 test-only fault modes passed (2026-10-28); see the measured
+closeout below.**
+
+## PR #5 M3 closeout — signal and timeout quarantine (2026-10-28)
+
+From artifact `12867485949` (Actions run `40803809282`), owner executed
+the signal and timeout fixed-mode controllers **separately** on M3 using
+the same independent 48-worker test-target runner. The two runs reported:
+
+- **Signal:** PID snapshot 3129, ASLR base `0x0dfe7000`, ARM SVC
+  bootstrap selected, private mmap/trampoline setup PASS, expected
+  `SIGUSR1 DELIVERY STOP REJECTED; NO RESUME OR RETRY`, followed by
+  `STATE=QUARANTINE; SAFE_TO_RETRY=false`, scoped test kill requested,
+  and `TEST-ONLY CLEANUP COMPLETE`.
+- **Timeout:** PID snapshot 3255, ASLR base `0x09ea5000`, same bootstrap/
+  trampoline setup, expected `NONRETURNING TEST CALL QUARANTINED; NO
+  RESUME OR RETRY`, followed by the same quarantine, scoped test kill
+  request and confirmed runner cleanup.
+
+See `docs/STATUS.md` for the actual selected output lines. CI for these
+variants: **23/23 host tests PASS**. Both tests were deliberately scoped to
+compiled functions in an owned `rbxc4c_target`; **neither entered
+`dlopen`**. Thus C4C-2's *representative abnormal-call classification*
+in this isolated target is evidenced, but the wider multithread/linker risk
+and recoverability obligations remain unproven. Do **not** infer that
+register restoration, SIGKILL, or Android service restart can unwind a
+partially entered linker operation.
+
+**Next engineering gate: C4C-3 evidence + operator hazard review.** Propose
+read-only, dynamically refreshed Bluetooth identity/mapping/namespace
+evidence; separately document independent USB/ADB control, operator
+restart/recovery playbook, abort thresholds, and test/production
+differences. No automatic service termination or live injection.
+Only after an explicit owner-reviewed GO/NO-GO assessment may any further
+production experiment be considered. Keep PR #5 as reviewable test-only
+evidence; it is not a production authorization.

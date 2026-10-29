@@ -55,6 +55,23 @@ class RunnerTests(unittest.TestCase):
         with patch.object(runner, 'own_pid_from_file', return_value=None):
             self.assertIsNone(runner.await_own_pid('dev', session, deadline_s=0.5))
 
+    def test_controller_fault_modes_use_only_fixed_binaries(self):
+        from subprocess import CompletedProcess
+        result = CompletedProcess(args=['adb'], returncode=0,
+                                  stdout='STATE=QUARANTINE; SAFE_TO_RETRY=false\n',
+                                  stderr='')
+        with patch.object(runner.subprocess, 'run', return_value=result) as call_run:
+            for case in ('normal','signal','timeout'):
+                runner.run_controller('test-device', case)
+                args = call_run.call_args.args[0]
+                self.assertEqual(args[-1], runner.REMOTE + '/' + runner.CONTROLLERS[case])
+        self.assertEqual(set(runner.CONTROLLERS), {'normal','signal','timeout'})
+        for case in ('signal', 'timeout'):
+            self.assertIn('SCOPED TEST TARGET SIGKILL REQUESTED',
+                          runner.SUCCESS_MARKERS[case])
+            self.assertIn('STATE=QUARANTINE; SAFE_TO_RETRY=false',
+                          runner.SUCCESS_MARKERS[case])
+
     def test_controller_nonzero_does_not_hide_stdout(self):
         from subprocess import CompletedProcess
         result = CompletedProcess(args=['adb'], returncode=3, stdout='REMOTE CALL ERROR\n', stderr='')
@@ -91,6 +108,32 @@ class RunnerTests(unittest.TestCase):
              patch.object(runner, 'root') as root:
             runner.cleanup('adb', {41})
             self.assertEqual(root.call_args_list, [call('adb', 'rm -rf ' + runner.REMOTE)])
+
+    def test_cleanup_fails_closed_if_test_target_survives(self):
+        with patch.object(runner, 'pidof_candidates', return_value=[55]), \
+             patch.object(runner, 'is_owned_target', return_value=True), \
+             patch.object(runner, 'root') as root, \
+             patch.object(runner.time, 'monotonic', side_effect=[0, 4]):
+            self.assertFalse(runner.cleanup('dev', {55}))
+            root.assert_any_call('dev', 'kill -9 55')
+            self.assertNotIn(call('dev', 'rm -rf ' + runner.REMOTE),
+                             root.call_args_list)
+
+    def test_expected_fault_does_not_pass_if_cleanup_is_unverified(self):
+        session = Mock()
+        session.poll.return_value = None
+        with patch.object(runner, 'adb'), \
+             patch.object(runner, 'pidof_candidates', return_value=[]), \
+             patch.object(runner, 'launch_foreground_session', return_value=session), \
+             patch.object(runner, 'await_own_pid', return_value=88), \
+             patch.object(runner, 'find_target', return_value=88), \
+             patch.object(runner, 'run_controller', return_value='\n'.join(
+                 runner.SUCCESS_MARKERS['timeout'])) as ctl, \
+             patch.object(runner, 'cleanup', return_value=False), \
+             patch.object(runner, 'stop_host_session'), \
+             patch.object(Path, 'is_file', return_value=True):
+            self.assertEqual(runner.run('dev', 'timeout'), 2)
+            ctl.assert_called_once_with('dev', 'timeout')
 
     def test_cleanup_kills_only_validated_target(self):
         with patch.object(runner, 'pidof_candidates', return_value=[]), \

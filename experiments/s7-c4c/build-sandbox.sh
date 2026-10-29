@@ -11,7 +11,7 @@ rm -f .libdl.c .libdl.so
 python3 - <<'PY'
 import re,subprocess
 raw=subprocess.check_output(['readelf','-Ws','rbxc4c_target'],text=True)
-names=['rbxc4c_return_trap','rbxc4c_mmap2','rbxc4c_mprotect','rbxc4c_munmap','rbxc4c_load','rbxc4c_error','rbxc4c_ticks','rbxc4c_ready']
+names=['rbxc4c_return_trap','rbxc4c_mmap2','rbxc4c_mprotect','rbxc4c_munmap','rbxc4c_load','rbxc4c_error','rbxc4c_ticks','rbxc4c_ready','rbxc4c_fault_signal','rbxc4c_fault_spin']
 vals={}
 for line in raw.splitlines():
     fields=line.split()
@@ -25,5 +25,9 @@ with open('target_offsets.h','w') as f:
 print('target symbol RVAs:',{k:hex(v) for k,v in vals.items()})
 PY
 $CC $TARGET -marm -O2 -fPIE -pie -nostdlib -fuse-ld=lld -Wl,-dynamic-linker,/system/bin/linker controller.c -o rbxc4c_controller
+for case in signal timeout; do
+  if [[ "$case" == signal ]]; then FAULT=1; else FAULT=2; fi
+  $CC $TARGET -marm -O2 -fPIE -pie -nostdlib -fuse-ld=lld -Wl,-dynamic-linker,/system/bin/linker -DRBXC4C_FAULT_CASE="$FAULT" controller.c -o "rbxc4c_controller_$case"
+done
 readelf -h rbxc4c_target | grep -E 'Class:|Machine:|Type:'
 readelf -h rbxc4c_controller | grep -E 'Class:|Machine:|Type:'

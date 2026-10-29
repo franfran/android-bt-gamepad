@@ -66,6 +66,36 @@ class ContractTests(unittest.TestCase):
         self.assertIn('if(waitstop(pid,timeout,&status)!=1',bootstrap)
         self.assertIn('WSTOPSIG(status)!=SYSCALL_STOP',bootstrap)
 
+    def test_fault_variants_are_compile_time_and_test_target_only(self):
+        code=(ROOT/'controller.c').read_text()
+        target=(ROOT/'target.c').read_text()
+        build=(ROOT/'build-sandbox.sh').read_text()
+        self.assertIn('#define RBXC4C_FAULT_CASE 0',code)
+        self.assertIn('OFF_RBXC4C_FAULT_SIGNAL',code)
+        self.assertIn('OFF_RBXC4C_FAULT_SPIN',code)
+        self.assertIn('fault_rc==-3 && last_call_signal==SIGUSR1',code)
+        self.assertIn('fault_rc==-2 && last_call_signal==0',code)
+        self.assertIn('if(w==0)return -2;',code)
+        self.assertIn('if(w!=1)return -9;',code)
+        self.assertIn('STATE=QUARANTINE; SAFE_TO_RETRY=false',code)
+        self.assertIn('SCOPED TEST TARGET SIGKILL REQUESTED',code)
+        self.assertIn('rbxc4c_fault_signal',target)
+        self.assertIn('rbxc4c_fault_spin',target)
+        self.assertIn('sys3(268,pid,tid,10)',target)
+        self.assertIn('rbxc4c_controller_$case',build)
+        self.assertIn('for case in signal timeout',build)
+        self.assertNotIn('com.android.bluetooth',code)
+        self.assertNotIn('killall',code)
+
+    def test_runner_fault_controller_is_fixed_choice_not_arbitrary_path(self):
+        runner=(ROOT/'run-on-m3.py').read_text()
+        self.assertIn("'signal': 'rbxc4c_controller_signal'",runner)
+        self.assertIn("'timeout': 'rbxc4c_controller_timeout'",runner)
+        self.assertIn('choices=(\'normal\', \'signal\', \'timeout\')',runner)
+        self.assertIn('SUCCESS_MARKERS[fault_case]',runner)
+        self.assertIn('SCOPED TEST TARGET SIGKILL REQUESTED',runner)
+        self.assertNotIn('killall',runner)
+
     def test_no_vendor_binary_in_build(self):
         build=(ROOT/'build-sandbox.sh').read_text()
         self.assertIn('test_addon.c',build)

@@ -15,7 +15,22 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 REMOTE = '/data/local/tmp/retrobox_s7c4c_test'
 TARGET = REMOTE + '/rbxc4c_target'
-ARTIFACTS = ('rbxc4c_target', 'rbxc4c_controller', 'libretrobox_c4c_test.so')
+ARTIFACTS = ('rbxc4c_target', 'rbxc4c_controller', 'rbxc4c_controller_signal',
+             'rbxc4c_controller_timeout', 'libretrobox_c4c_test.so')
+CONTROLLERS = {
+    'normal': 'rbxc4c_controller',
+    'signal': 'rbxc4c_controller_signal',
+    'timeout': 'rbxc4c_controller_timeout',
+}
+SUCCESS_MARKERS = {
+    'normal': ('PASS: non-fork independent ARM32 target',),
+    'signal': ('EXPECTED SIGNAL: SIGUSR1 DELIVERY STOP REJECTED',
+               'STATE=QUARANTINE; SAFE_TO_RETRY=false',
+               'SCOPED TEST TARGET SIGKILL REQUESTED'),
+    'timeout': ('EXPECTED TIMEOUT: NONRETURNING TEST CALL QUARANTINED',
+                'STATE=QUARANTINE; SAFE_TO_RETRY=false',
+                'SCOPED TEST TARGET SIGKILL REQUESTED'),
+}
 
 
 def adb(serial, *args, timeout=15):
@@ -67,10 +82,10 @@ def await_own_pid(serial, session, deadline_s=6):
     return None
 
 
-def run_controller(serial):
+def run_controller(serial, fault_case='normal'):
     """Show stdout even on nonzero return; otherwise the first fault is lost."""
     proc = subprocess.run(['adb', '-s', serial, 'exec-out', 'su', '0',
-                           'sh', '-c', REMOTE + '/rbxc4c_controller'],
+                           'sh', '-c', REMOTE + '/' + CONTROLLERS[fault_case]],
                           capture_output=True, text=True, timeout=25, check=False)
     print('===== M3 S7-C4C RESULT =====')
     print(proc.stdout.rstrip())
@@ -178,18 +193,31 @@ def cleanup(serial, candidates):
             # Revalidate immediately before kill; do not act on stale pidfile.
             if is_owned_target(serial, pid):
                 root(serial, 'kill -9 %d' % pid)
-    remaining = [pid for pid in pidof_candidates(serial) if is_owned_target(serial, pid)]
+    # The controller may only have *requested* SIGKILL. Require independent
+    # host-side disappearance evidence before reporting test success.
+    deadline = time.monotonic() + 3
+    remaining = []
+    while True:
+        remaining = [pid for pid in pidof_candidates(serial)
+                     if is_owned_target(serial, pid)]
+        if not remaining or time.monotonic() >= deadline:
+            break
+        time.sleep(0.15)
     if remaining:
-        print('CLEANUP WARNING: verified target remains; test dir preserved', file=sys.stderr)
-    else:
-        root(serial, 'rm -rf ' + REMOTE)
-        print('TEST-ONLY CLEANUP COMPLETE')
+        print('CLEANUP WARNING: verified target remains; test dir preserved',
+              file=sys.stderr)
+        return False
+    root(serial, 'rm -rf ' + REMOTE)
+    print('TEST-ONLY CLEANUP COMPLETE')
+    return True
 
 
-def run(serial):
+def run(serial, fault_case='normal'):
     candidates = set()
     session = None
     cleanup_allowed = True
+    outcome = 2
+    cleanup_ok = True
     try:
         adb(serial, 'shell', 'mkdir', '-p', REMOTE)
         # Enforce single-test state: refuse to trample another running target.
@@ -202,7 +230,9 @@ def run(serial):
                 raise RuntimeError('missing ARM32 prebuilt: %s' % file)
             adb(serial, 'push', str(BASE / file), REMOTE + '/' + file)
         adb(serial, 'shell', 'chmod', '700', REMOTE + '/rbxc4c_target',
-            REMOTE + '/rbxc4c_controller')
+            REMOTE + '/rbxc4c_controller',
+            REMOTE + '/rbxc4c_controller_signal',
+            REMOTE + '/rbxc4c_controller_timeout')
         # Only the fixed test pidfile/log are removed, never arbitrary paths.
         root(serial, 'rm -f ' + REMOTE + '/target.pid ' + REMOTE + '/target.log')
         session = launch_foreground_session(serial)
@@ -220,29 +250,42 @@ def run(serial):
             diagnostic(serial, pid)
             raise RuntimeError('ADB foreground session ended before controller; refusing ptrace')
         print('TARGET READY: PID=%d, 48 workers, identity verified; ADB session alive' % pid)
-        result = run_controller(serial)
-        if 'PASS: non-fork independent ARM32 target' not in result:
-            raise RuntimeError('controller did not report complete success')
-        print('S7-C4C-1/2 INDEPENDENT TARGET = PASS (NOT Bluetooth authorization)')
-        return 0
+        result = run_controller(serial, fault_case)
+        if not all(marker in result for marker in SUCCESS_MARKERS[fault_case]):
+            raise RuntimeError('controller did not report expected %s result' % fault_case)
+        if fault_case == 'normal':
+            print('S7-C4C-1/2 INDEPENDENT TARGET = PASS (NOT Bluetooth authorization)')
+        else:
+            print('S7-C4C TEST-ONLY %s FAULT = EXPECTED QUARANTINE (NOT Bluetooth authorization)'
+                  % fault_case.upper())
+        outcome = 0
     except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
         print('FAIL CLOSED:', exc, file=sys.stderr)
         if session is not None and session.poll() is not None:
             print('TARGET SESSION EXIT STATUS:', session.returncode, file=sys.stderr)
-        return 2
+        outcome = 2
     finally:
         try:
             if cleanup_allowed:
-                cleanup(serial, candidates)
+                cleanup_ok = cleanup(serial, candidates)
             else:
+                cleanup_ok = False
                 print('PRE-EXISTING TEST PROCESS PRESERVED; NO CLEANUP', file=sys.stderr)
         except (RuntimeError, subprocess.TimeoutExpired) as exc:
+            cleanup_ok = False
             print('CLEANUP WARNING:', exc, file=sys.stderr)
         finally:
             stop_host_session(session)
+    if not cleanup_ok:
+        print('FAIL CLOSED: verified test-target cleanup not established', file=sys.stderr)
+        return 2
+    return outcome
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('adb_serial', help='ADB serial/IP:port (no default)')
-    sys.exit(run(parser.parse_args().adb_serial))
+    parser.add_argument('--fault-case', choices=('normal', 'signal', 'timeout'),
+                        default='normal', help='Fixed owned-target test mode only')
+    args = parser.parse_args()
+    sys.exit(run(args.adb_serial, args.fault_case))
