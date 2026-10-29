@@ -72,6 +72,7 @@ class Tests(unittest.TestCase):
         data=json.loads(error.getvalue())
         self.assertEqual(data["failure_stage"],"stage_package_uid")
         self.assertNotIn("secret OEM",error.getvalue())
+        self.assertEqual(data["package_uid_attempts"], ["UNRECOGNIZED_FORMAT"] * 3)
 
     def test_package_uid_second_command_fallback(self):
         responses = [b"671", status(), b"droid.bluetooth\n", b"com.android.bluetooth\x00",
@@ -80,6 +81,12 @@ class Tests(unittest.TestCase):
         with patch.object(mod, "read", side_effect=responses):
             report=mod.collect("serial")
         self.assertEqual(report["package_process_association"], "CORROBORATED")
+
+    def test_distinguish_empty_and_failed_commands(self):
+        from unittest.mock import patch
+        with patch.object(mod, "read", side_effect=[b"", RuntimeError("private"), b"OEM info"]):
+            with self.assertRaisesRegex(RuntimeError,"EMPTY_OUTPUT,COMMAND_FAILED,UNRECOGNIZED_FORMAT"):
+                mod.lookup_uid("serial")
 
     def test_cmdline_sanitization(self):
         self.assertEqual(mod.cmdline_category(b"com.android.bluetooth\x00--secret"),
