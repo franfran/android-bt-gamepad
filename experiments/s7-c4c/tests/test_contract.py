@@ -82,8 +82,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn('rbxc4c_fault_signal',target)
         self.assertIn('rbxc4c_fault_spin',target)
         self.assertIn('sys3(268,pid,tid,10)',target)
-        self.assertIn('rbxc4c_controller_signal',build)
-        self.assertIn('rbxc4c_controller_timeout',build)
+        self.assertIn('rbxc4c_controller_$case',build)
+        self.assertIn('for case in signal timeout',build)
         self.assertNotIn('com.android.bluetooth',code)
         self.assertNotIn('killall',code)
 
