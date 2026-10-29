@@ -55,10 +55,10 @@ def inspect(callgraph, elf=None, objdump="llvm-objdump"):
         raise ValueError("ELF_MISSING_OR_EXCEEDS_64MIB")
     if not shutil.which(objdump):
         raise ValueError("LLVM_OBJDUMP_NOT_FOUND")
-    # Only fixed, small readonly target windows. No unbounded process output.
+    # The archived BLX immediate targets land in ARM-state .plt entries.\n    # Do NOT force Thumb decoding for these ARM interworking targets.\n    # The callsites themselves are Thumb, but their destinations are ARM.\n    # Only fixed, small readonly target windows. No unbounded process output.
     for item in items:
         addr=int(item["target_vma"],16)
-        proc=subprocess.run([objdump,"-d","--triple=thumbv7-linux-androideabi",
+        proc=subprocess.run([objdump,"-d",
                              "--start-address=0x%x"%addr,
                              "--stop-address=0x%x"%(addr+WINDOW),str(elf)],
                             capture_output=True,text=True,timeout=10,check=False)
