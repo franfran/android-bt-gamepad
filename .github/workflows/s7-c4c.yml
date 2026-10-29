@@ -16,6 +16,8 @@ jobs:
           bash build-sandbox.sh
           python3 -m unittest discover -s tests -v
           readelf -d rbxc4c_target | grep -q 'libdl.so'
+          test -f run-on-m3.py
+          python3 -m py_compile run-on-m3.py
       - uses: actions/upload-artifact@v4
         with:
           name: s7-c4c-arm32-test-only
@@ -24,4 +26,6 @@ jobs:
             experiments/s7-c4c/rbxc4c_controller
             experiments/s7-c4c/libretrobox_c4c_test.so
             experiments/s7-c4c/target_offsets.h
+            experiments/s7-c4c/run-on-m3.py
+            experiments/s7-c4c/README.md
           retention-days: 7

@@ -56,3 +56,51 @@ Code: `experiments/s7-c4c/` in [PR #3](https://github.com/franfran/android-bt-ga
 **Critical limitation:** The very first remote call returns through `rbxc4c_return_trap`, specially compiled into the test target. Later remote calls use a target-private RX return trampoline. Actual `com.android.bluetooth` has **no built-in test trap**. A target-independent, ARM/Thumb-safe bootstrap plus independently verified service recovery/namespace behavior is still required. No remote `dlopen` was performed on Bluetooth. This is a real target-specific parity milestone, not proof of safe production injection.
 
 Next work: investigate a **target-independent bootstrap** in a similarly independently started non-Bluetooth test process (without its precompiled return-trap), then separately assess linker namespace and an out-of-band service recovery procedure; avoid claiming register restoration unblocks a stuck linker. Do not reuse the retired `bt_inert_inject` tool.
+
+## Continuation after PR #3: ARM SVC bootstrap candidate (now M3 normal-path measured)
+
+A separate stacked experimental branch `feat/s7-c4c-svc-bootstrap-test`
+removes controller dependence on the test target's precompiled BKPT return
+address for its first remote syscall. It selects a verified ARM `svc #0`
+instruction in the standalone test ELF, uses tagged `ptrace` syscall stops
+for remote `mmap2/mprotect/munmap`, and keeps the private RX BKPT trampoline
+for test-only remote `dlopen` return. The original target still includes
+unused test helper symbols; this is a controller independence test, **not**
+proof of arbitrary real-service injection.
+
+**Status: normal-path M3 test PASS on 2026-10-28; CI 18/18 PASS.**
+Signal/forced-timeout fault injection and independent recovery remain untested.
+This is partial owned-process parity, not completion of all C4C-2 gates.
+Independent recovery and namespace acceptance are separate gates; production Bluetooth stays NO-GO.
+
+## PR #4 closeout: SVC bootstrap normal-path PASS on M3 (2026-10-28)
+
+The continuation branch is now [draft PR #4](https://github.com/franfran/android-bt-gamepad/pull/4)
+stacked on PR #3. In the separately started **test-only** `rbxc4c_target`,
+the controller selects an ARM-state `svc #0` within the target's own
+executable mapping, uses tagged `PTRACE_SYSCALL` stops for remote
+`mmap2/mprotect/munmap`, and uses an RX private return trampoline for its
+test `dlopen/dlerror` wrapper calls. Unlike PR #3, the controller does not
+use a precompiled `rbxc4c_return_trap` for initial allocation. The legacy
+helper code is still built into the test ELF and `dlopen` remains an exported
+test-target wrapper; the result is **not a general-process call loader**.
+
+**Measured M3 PASS:** owner returned the complete run output: PID 2963,
+48 workers, dynamically resolved load bias, SVC bootstrap chosen, target
+private mmap2, RX return trampoline, expected negative library load and
+nonempty `dlerror`, inert module mapped, scratch canaries intact,
+background worker progression, SVC-driven munmap, scoped test-only cleanup.
+CI for the corrected artifact ran 18/18 host tests PASS (Actions
+`40802426406`, artifact `12865984164`). PID/address are observation-only,
+never configuration values. See `docs/STATUS.md` for the exact selected
+stdout lines.
+
+**Next safety work before any promotion:** do isolated, deliberate
+unexpected-signal and post-entry timeout tests with unambiguous
+quarantine/no-retry evidence; evaluate whether register restoration and
+signal-delivery stops are correctly distinguished; prepare an independently
+verifiable, operator-controlled recovery plan. Do not assume target-thread
+linker lock safety. Verify Bluetooth's linker namespace without executing
+an unchecked library in the live process. Owner review is required for
+future safety gates, and **live Bluetooth remains NO-GO**. No automated
+production injection, no global Bluetooth auth policy changes.

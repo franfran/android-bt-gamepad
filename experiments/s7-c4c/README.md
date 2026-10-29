@@ -77,3 +77,52 @@ exit code, so linker/ptrace failures are visible rather than being swallowed.
 **M3 PASS**: operator verified independent foreground ADB target session alive, 48 workers ready, load-bias resolution, target-private remote `mmap2`, RX return trampoline, negative `dlopen` + `dlerror`, inert module mapped, canaries intact, workers progressed, remote `munmap`, return via test-target image bootstrap and test-only cleanup. The target was independently launched, not forked by tracer. See `docs/STATUS.md` for exact measured assertions. Earlier v1/v2 startup gating failures are superseded by this v3 result.
 
 **Scope guard:** the initial BKPT bootstrap is built into this test target. Bluetooth has no matching test stub. M3 PASS does **not** authorize real Bluetooth injection, prove its linker namespace, guarantee safe rollback, or repair DS3 wireless pairing.
+
+## Experimental follow-up: test-image SVC bootstrap (M3 normal path PASS)
+
+In `feat/s7-c4c-svc-bootstrap-test` (stacked on PR #3), `controller.c` no
+longer uses the target's compiled `rbxc4c_return_trap`, `rbxc4c_mmap2`,
+`rbxc4c_mprotect` or `rbxc4c_munmap` symbols. Instead it finds an
+already-existing ARM-state `svc #0` word inside the **test target's** executable
+mapping, saves the leader's registers, and uses `PTRACE_SYSCALL` with
+`PTRACE_O_TRACESYSGOOD` to observe syscall entry and exit. This lets the
+test controller allocate, protect, and release the private mapping without
+patching the target image or returning through an in-image BKPT symbol.
+Ordinary `dlopen`/ `dlerror` calls still return through the verified private
+RX trampoline; their test wrappers remain deliberately target-specific.
+
+**M3 normal path PASS for PR #4's SVC bootstrap (2026-10-28).** PR #3's
+separate M3 PASS covers the previous controller revision. The test executable continues to
+contain unused legacy test helpers for ABI/parity comparison; the new controller
+does not reference them. The hardware normal-path run exercised tagged entry/exit stops, address/ARM
+state, scratch cleanup and worker progress; explicit unexpected signal and
+forced timeout scenarios are **still untested**. If any stop is non-syscall or ambiguous, kill only the verified
+test target; never resume an uncertain remote call. A kernel/signal stop that
+cannot be classified reliably is a FAIL, not an excuse to disable tagging.
+
+No CLI accepting PID or library path is added. This is NOT an authorization
+or mechanism to load code into `com.android.bluetooth`. Android Bluetooth
+linker namespace and independent service recovery are still NO-GO. Rebuild
+in CI via `build-sandbox.sh`, then use the fixed M3 test-only runner *only*
+with owner-controlled test process and explicit ADB serial.
+
+## SVC bootstrap M3 validation (PR #4, 2026-10-28)
+
+**Independent test-target normal path PASS**, operator-supplied stdout from
+the corrected six-file CI artifact (run `40802426406`, artifact
+`12865984164`). The fixed runner reported `TARGET READY` with 48 workers,
+`TEST IMAGE ARM SVC BOOTSTRAP SELECTED`, successful private `mmap2`, RX
+trampoline, negative `dlopen` + `dlerror`, mapped inert test module,
+canaries and active workers, `REMOTE MUNMAP COMPLETED VIA TARGET-IMAGE SVC
+BOOTSTRAP`, and `TEST-ONLY CLEANUP COMPLETE`.
+
+This supersedes the **UNTESTED** status of this experimental branch's
+normal-path SVC bootstrap in the preceding section; earlier v3 results
+remain PR #3 evidence. The test does **not** establish signal or forced
+linker timeout behavior, Bluetooth linker namespace compatibility, safe
+service recovery or DS3 pairing. The controller still invokes its
+instrumented test target's exported `dlopen/dlerror` wrappers.
+
+Download the complete artifact with `run-on-m3.py` and `README.md` included;
+the original four-file artifact was incomplete. This remains a test-only
+experiment, not a Bluetooth injection command or merge authorization.

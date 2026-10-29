@@ -38,6 +38,34 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn('killall',runner)
         self.assertNotIn('stop bluetooth',runner)
 
+    def test_svc_bootstrap_does_not_call_precompiled_trap(self):
+        code=(ROOT/'controller.c').read_text()
+        self.assertIn('instruction==0xef000000u',code)
+        self.assertIn('PTRACE_TRACESYSGOOD',code)
+        self.assertIn('SYSCALL_STOP (SIGTRAP|0x80)',code)
+        self.assertIn('static int remote_syscall(',code)
+        self.assertIn('remote_syscall(pid,&orig,svc,192,args',code)
+        self.assertIn('remote_syscall(pid,&orig,svc,125,args',code)
+        self.assertIn('remote_syscall(pid,&orig,svc,91,args',code)
+        self.assertNotIn('OFF_RBXC4C_RETURN_TRAP',code)
+        self.assertNotIn('OFF_RBXC4C_MMAP2',code)
+        self.assertNotIn('OFF_RBXC4C_MPROTECT',code)
+        self.assertNotIn('OFF_RBXC4C_MUNMAP',code)
+        self.assertIn('STATE=QUARANTINE',code)
+        # Bootstrap must scan existing executable text, not replace a text word.
+        self.assertIn("maps_buf[j]!='r'||maps_buf[j+2]!='x'",code)
+        self.assertNotIn('poke(pid,svc',code)
+
+    def test_syscall_bootstrap_calls_restore_original_registers(self):
+        code=(ROOT/'controller.c').read_text()
+        start=code.index('static int remote_syscall(')
+        stop=code.index('static int remote_call(',start)
+        bootstrap=code[start:stop]
+        self.assertIn('SETREGS,pid,0,(int)orig',bootstrap)
+        self.assertIn('stop.r[i]!=orig->r[i]',bootstrap)
+        self.assertIn('if(waitstop(pid,timeout,&status)!=1',bootstrap)
+        self.assertIn('WSTOPSIG(status)!=SYSCALL_STOP',bootstrap)
+
     def test_no_vendor_binary_in_build(self):
         build=(ROOT/'build-sandbox.sh').read_text()
         self.assertIn('test_addon.c',build)
