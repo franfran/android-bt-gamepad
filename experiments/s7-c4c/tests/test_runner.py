@@ -55,6 +55,23 @@ class RunnerTests(unittest.TestCase):
         with patch.object(runner, 'own_pid_from_file', return_value=None):
             self.assertIsNone(runner.await_own_pid('dev', session, deadline_s=0.5))
 
+    def test_controller_fault_modes_use_only_fixed_binaries(self):
+        from subprocess import CompletedProcess
+        result = CompletedProcess(args=['adb'], returncode=0,
+                                  stdout='STATE=QUARANTINE; SAFE_TO_RETRY=false\n',
+                                  stderr='')
+        with patch.object(runner.subprocess, 'run', return_value=result) as call_run:
+            for case in ('normal','signal','timeout'):
+                runner.run_controller('test-device', case)
+                args = call_run.call_args.args[0]
+                self.assertEqual(args[-1], runner.REMOTE + '/' + runner.CONTROLLERS[case])
+        self.assertEqual(set(runner.CONTROLLERS), {'normal','signal','timeout'})
+        for case in ('signal', 'timeout'):
+            self.assertIn('SCOPED TEST TARGET SIGKILL REQUESTED',
+                          runner.SUCCESS_MARKERS[case])
+            self.assertIn('STATE=QUARANTINE; SAFE_TO_RETRY=false',
+                          runner.SUCCESS_MARKERS[case])
+
     def test_controller_nonzero_does_not_hide_stdout(self):
         from subprocess import CompletedProcess
         result = CompletedProcess(args=['adb'], returncode=3, stdout='REMOTE CALL ERROR\n', stderr='')
