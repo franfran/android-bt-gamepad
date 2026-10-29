@@ -43,18 +43,17 @@ class Tests(unittest.TestCase):
         self.assertFalse(report["package_uid_matches_process"])
         self.assertEqual(report["package_process_association"],"UNVERIFIED")
 
-    def test_ambiguous_package_metadata_fails(self):
-        with self.assertRaises(ValueError):
-            mod.package_uid(b"package:com.android.bluetooth uid:1002\npackage:com.oem uid:1002")
+    def test_unrelated_package_is_ignored(self):
+        self.assertEqual(mod.package_uid(b"package:com.android.bluetooth uid:1002\npackage:com.oem uid:1002"),1002)
 
     def test_substring_results_select_exact_package(self):
-        raw=(b"package:com.android.bluetoothmidiservice uid:10036\\n"
-             b"package:com.android.bluetooth uid:1002\\n")
+        raw=(b"package:com.android.bluetoothmidiservice uid:10036\n"
+             b"package:com.android.bluetooth uid:1002\n")
         self.assertEqual(mod.package_uid(raw),1002)
 
     def test_duplicate_exact_package_rejected(self):
-        raw=(b"package:com.android.bluetooth uid:1002\\n"
-             b"package:com.android.bluetooth uid:1003\\n")
+        raw=(b"package:com.android.bluetooth uid:1002\n"
+             b"package:com.android.bluetooth uid:1003\n")
         with self.assertRaises(ValueError):
             mod.package_uid(raw)
 
