@@ -37,7 +37,8 @@
 | S7-C3e v2 | B finished before A constructor in both cases; normal and timeout policy PASS | Owned process; does not prove absence of linker locks |
 | S7-C4A v2 | Add-on SHA-256 matches staged bytes; PID unchanged PASS | Add-on staged, **not loaded** |
 | S7-C4B | Read-only integrated resolver/checksum PASS; `inspection_issues=[]` | `addon.mapped=false`, `injection_authorized=false` |
-| S7-C4C-1/2 v3 | **M3 PASS (2026-10-28)** | Separately started 48-worker test target, target-private mmap/guard/RW/RX trampoline, negative/positive dlopen, remote dlerror, canaries, worker progression, munmap; bootstrap uses test-target compiled trap only |
+| S7-C4C-1/2 v3 (PR #3) | **M3 PASS (2026-10-28)** | Separately started 48-worker test target, target-private mmap/guard/RW/RX trampoline, negative/positive dlopen, remote dlerror, canaries, worker progression, munmap; bootstrap uses test-target compiled trap only |
+| S7-C4C SVC bootstrap (PR #4) | **M3 normal-path PASS (2026-10-28)** | Independent 48-worker test target; ARM SVC syscall-stop bootstrap, guard/RW/RX scratch, positive/negative test dlopen/dlerror, worker progress, munmap, cleanup; signals/timeouts untested; Bluetooth NO-GO |
 
 Raw results shared by operator are authoritative over README files written before each M3 test. `evidence/` contains selected audit JSON snapshots, not the full raw logs.
 
@@ -47,10 +48,46 @@ Operator ran `experiments/s7-c4c/run-on-m3.py` v3 (PR #3) and supplied the compl
 
 **Interpretation:** cross-process loader parity proven in a separately started, instrumented ARM32 test process on M3. The initial bootstrap still relies on a BKPT symbol compiled into that test target, and its success does not establish an arbitrary-process bootstrap, Bluetooth linker namespace, a recovery procedure for stalled real Bluetooth `dlopen`, or wireless DS3 pairing. Live Bluetooth injection remains NO-GO. Earlier v1/v2 startup failures were not remote-call failures; v3 switched to a persistent ADB foreground target session and target-written PID.
 
-## Pending follow-up experiment (not M3 evidence)
+## PR #4 SVC bootstrap: normal-path M3 PASS (see measured trial below)
 
 The stacked `feat/s7-c4c-svc-bootstrap-test` branch proposes target-image
 ARM `SVC` syscall-stop bootstrap to eliminate dependency on the special
-test-target return trap for initial memory allocation. **Not yet verified on
-M3.** The PR #3 M3 PASS remains attributed only to its original test-target
-trap bootstrap. No Bluetooth execution or DS3 pairing change is authorized.
+test-target return trap for initial memory allocation. **Normal path verified
+on M3** (details below). PR #3's earlier M3 PASS remains separately attributed
+to the original trap bootstrap. No Bluetooth execution or DS3 pairing change is authorized.
+
+## PR #4 SVC bootstrap independent-target M3 trial (measured, 2026-10-28)
+
+Operator used the **corrected six-file test artifact** from GitHub Actions run
+`40802426406` (artifact `12865984164`) and ran
+`python3 run-on-m3.py <ADB_SERIAL>` on an owner-controlled M3. The full stdout
+was supplied in chat and records:
+
+```text
+TARGET READY: PID=2963, 48 workers, identity verified; ADB session alive
+TARGET_IDENTITY_CONFIRMED; load_bias=0x0faf8000
+TEST IMAGE ARM SVC BOOTSTRAP SELECTED
+TARGET-PRIVATE MMAP2 OK
+TARGET-OWNED RX RETURN TRAMPOLINE VERIFIED
+EXPECTED MISSING LIBRARY: DLOPEN NULL
+REMOTE DLERROR CAPTURED (nonempty)
+TEST MODULE LOADED IN INDEPENDENT TARGET; CANARIES VERIFIED
+BACKGROUND WORKERS PROGRESSED WHILE LEADER TRACED
+REMOTE MUNMAP COMPLETED VIA TARGET-IMAGE SVC BOOTSTRAP
+PASS: non-fork independent ARM32 target call, RX trampoline, dlopen negative/positive, cleanup
+S7-C4C-1/2 INDEPENDENT TARGET = PASS (NOT Bluetooth authorization)
+TEST-ONLY CLEANUP COMPLETE
+```
+
+**Measured:** test-process normal path PASS with SVC-stop bootstrap, private
+mapping, return trampoline, library load/error handling, active workers and
+scoped cleanup. The program uses tagged `PTRACE_SYSCALL` entry/exit stops and
+restores leader registers, but stdout does **not** include detailed per-stop
+register dumps, explicit signal-delivery simulation, or a forced timeout.
+PID and load-bias above are historical snapshots only.
+
+**Still untested:** unexpected signals or timeout while syscall/linker is
+active, arbitrary library namespace in Android Bluetooth, and any actual
+Bluetooth process execution/recovery. SVC site selection is confined to the
+controlled test executable, and `dlopen` still calls test-specific wrapper
+symbols. **Do not promote PR #4's pass to production S7-C4C approval.**
