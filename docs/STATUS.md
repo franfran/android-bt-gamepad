@@ -101,3 +101,9 @@ signal-delivery and nonreturning-function timeout tests, and a runner switch
 separately; no pass is assumed. These tests do not run `dlopen` during the
 fault, and **cannot prove recovery from a real stalled Android linker**.
 Normal-path PR #4 PASS remains valid independently. Bluetooth remains NO-GO.
+
+**PR #5 CI evidence:** GitHub Actions build `40803809282` on commit
+`158ce094a99365e01f9162ce5adba42cccafd427` compiled all three ARM32
+controller variants and passed **23/23 host tests**, producing eight-file
+artifact `12867485949`. General source safety workflow `40803809204`
+PASS. These are **not** hardware fault-path results.
