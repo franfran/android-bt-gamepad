@@ -91,3 +91,13 @@ active, arbitrary library namespace in Android Bluetooth, and any actual
 Bluetooth process execution/recovery. SVC site selection is confined to the
 controlled test executable, and `dlopen` still calls test-specific wrapper
 symbols. **Do not promote PR #4's pass to production S7-C4C approval.**
+
+## Pending PR #5: fixed test-target fault-path modes (not M3 verified)
+
+The stacked fault-path branch adds **compile-time fixed** `SIGUSR1`
+signal-delivery and nonreturning-function timeout tests, and a runner switch
+(`--fault-case signal|timeout`) for a deliberately independently started
+`rbxc4c_target` only. Host compilation/tests and M3 evidence are recorded
+separately; no pass is assumed. These tests do not run `dlopen` during the
+fault, and **cannot prove recovery from a real stalled Android linker**.
+Normal-path PR #4 PASS remains valid independently. Bluetooth remains NO-GO.
