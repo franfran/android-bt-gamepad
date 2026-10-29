@@ -120,3 +120,9 @@ This intentionally tests **classification and scoped termination only**,
 not restoration of a hung Bionic linker, not a clean service restart, and
 not Android Bluetooth linker namespace acceptance. CI/hardware results must
 be appended only after actual evidence. Live Bluetooth continues NO-GO.
+
+**Source/CI qualified (PR #5):** Actions `40803809282` built three ARM32
+controllers and ran **23/23 host tests PASS**; artifact `12867485949`
+includes the runner and both fixed fault-mode binaries. General source
+safety workflow `40803809204` PASS. **No M3 signal or forced timeout test
+has been reported yet.**
