@@ -15,7 +15,7 @@ def read(serial, cmd, root=False):
     args = prefix + [cmd] if root else prefix + cmd.split()
     p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=12)
     if p.returncode or len(p.stdout) > 16384:
-        raise RuntimeError("read-only evidence unavailable")
+        raise RuntimeError("adb_read_failed")
     return p.stdout
 
 def parse_pid(raw):
@@ -39,10 +39,10 @@ def package_uid(raw):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     pattern = r"package:com\.android\.bluetooth\s+uid:(\d+)"
     if len(lines) != 1:
-        raise ValueError("package UID ambiguous")
+        raise ValueError("package_uid_format")
     match = re.fullmatch(pattern, lines[0])
     if not match:
-        raise ValueError("package metadata missing")
+        raise ValueError("package_uid_format")
     return int(match.group(1))
 
 def cmdline_category(raw):
@@ -57,13 +57,20 @@ def cmdline_category(raw):
 def collect(serial):
     if not serial or len(serial) > 128 or serial.startswith("-"):
         raise ValueError("invalid serial")
+    stage = "pid_lookup"
     first = parse_pid(read(serial, "pidof com.android.bluetooth", True))
+    stage = "process_identity"
     status1 = parse_status(read(serial, "cat /proc/" + first + "/status", True))
     comm = read(serial, "cat /proc/" + first + "/comm", True).decode("utf-8", "replace").strip()
     if status1["Pid"] != int(first) or status1["Uid"] != 1002 or status1["TracerPid"] != 0 or comm != "droid.bluetooth":
         raise ValueError("Bluetooth process identity mismatch")
+    stage = "process_cmdline"
     name = cmdline_category(read(serial, "cat /proc/" + first + "/cmdline", True))
-    uid = package_uid(read(serial, "pm list packages -U com.android.bluetooth"))
+    stage = "package_uid_lookup"
+    try:
+        uid = package_uid(read(serial, "pm list packages -U com.android.bluetooth"))
+    except (ValueError, RuntimeError):
+        raise ValueError("package_uid_lookup_unavailable")
     status2 = parse_status(read(serial, "cat /proc/" + first + "/status", True))
     if parse_pid(read(serial, "pidof com.android.bluetooth", True)) != first or status1 != status2:
         raise ValueError("Bluetooth process changed during inspection")
