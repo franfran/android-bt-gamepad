@@ -46,16 +46,22 @@ def package_uid(raw):
     return int(match.group(1))
 
 def lookup_uid(serial):
-    # Some OEMs expose package UID only to root or via cmd package.
-    # Read-only, fixed commands; never publish raw command responses.
-    for command, root in (("pm list packages -U com.android.bluetooth", False),
-                          ("cmd package list packages -U com.android.bluetooth", False),
-                          ("cmd package list packages -U com.android.bluetooth", True)):
+    # Keep diagnostics as fixed categories, never raw PM output or stderr.
+    outcomes = []
+    attempts = (("pm list packages -U com.android.bluetooth", False),
+                ("cmd package list packages -U com.android.bluetooth", False),
+                ("cmd package list packages -U com.android.bluetooth", True))
+    for command, root in attempts:
         try:
-            return package_uid(read(serial, command, root))
-        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired):
+            data = read(serial, command, root)
+        except (RuntimeError, OSError, subprocess.TimeoutExpired):
+            outcomes.append("COMMAND_FAILED")
             continue
-    raise RuntimeError("package_uid_unavailable")
+        try:
+            return package_uid(data)
+        except ValueError:
+            outcomes.append("EMPTY_OUTPUT" if not data.strip() else "UNRECOGNIZED_FORMAT")
+    raise RuntimeError("package_uid_unavailable:" + ",".join(outcomes))
 
 
 def cmdline_category(raw):
@@ -83,7 +89,12 @@ def collect(serial):
     if status1["Pid"] != int(first) or status1["Uid"] != 1002 or status1["TracerPid"] != 0 or comm != "droid.bluetooth":
         raise RuntimeError("stage_identity")
     name = safe_step("cmdline", lambda: cmdline_category(read(serial, "cat /proc/" + first + "/cmdline", True)))
-    uid = safe_step("package_uid", lambda: lookup_uid(serial))
+    try:
+        uid = lookup_uid(serial)
+    except RuntimeError as exc:
+        if str(exc).startswith("package_uid_unavailable:"):
+            raise RuntimeError("stage_package_uid|" + str(exc).split(":", 1)[1])
+        raise RuntimeError("stage_package_uid")
     status2 = safe_step("revalidation", lambda: parse_status(read(serial, "cat /proc/" + first + "/status", True)))
     last = safe_step("revalidation", lambda: parse_pid(read(serial, "pidof com.android.bluetooth", True)))
     if last != first or status1 != status2:
@@ -112,10 +123,14 @@ def main(argv=None):
     try:
         report = collect(args.adb_serial)
     except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-        stage_name = str(exc) if str(exc) in ("stage_pid", "stage_identity", "stage_cmdline", "stage_package_uid", "stage_revalidation") else "stage_other"
+        reason = str(exc)
+        stage_name = reason.split("|", 1)[0]
+        if stage_name not in ("stage_pid", "stage_identity", "stage_cmdline", "stage_package_uid", "stage_revalidation"):
+            stage_name = "stage_other"
         report = {"stage": "S7-C4C-3", "mode": "READ_ONLY_PACKAGE_PROCESS_ASSOCIATION",
                   "error": "read-only package/process lookup unavailable",
                   "failure_stage": stage_name,
+                  "package_uid_attempts": reason.split("|", 1)[1].split(",") if stage_name == "stage_package_uid" and "|" in reason else [],
                   "injection_authorized": False, "decision": "NO_GO"}
         print(json.dumps(report, sort_keys=True), file=sys.stderr)
         return 2
