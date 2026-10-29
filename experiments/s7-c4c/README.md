@@ -126,3 +126,44 @@ instrumented test target's exported `dlopen/dlerror` wrappers.
 Download the complete artifact with `run-on-m3.py` and `README.md` included;
 the original four-file artifact was incomplete. This remains a test-only
 experiment, not a Bluetooth injection command or merge authorization.
+
+## S7-C4C fault-path qualification — PR #5 (NOT YET M3 TESTED)
+
+This follow-up is a **separate test-only branch stacked on PR #4**. CI
+builds three different controllers for the fixed `rbxc4c_target` and the
+same scoped `run-on-m3.py` runner:
+
+- `normal` (default): preserve PR #4's M3-passed SVC + dlopen lifecycle.
+- `signal`: fixed exported test function sends `SIGUSR1` to its own traced
+  leader. Controller must observe a SIGUSR1 delivery stop (not a successful
+  trampoline SIGTRAP), emit `STATE=QUARANTINE; SAFE_TO_RETRY=false`, and
+  request **SIGKILL of that identified, owned test process only**.
+- `timeout`: fixed exported test function spins forever. Bounded 400 ms
+  remote-call deadline must expire; controller must never restore and resume
+  the indeterminate call, and instead quarantine + request scoped test kill.
+
+Each mode is selected by a **compile-time** build constant and can execute
+*only* its corresponding fixed test function inside `rbxc4c_target`. No
+arbitrary PID, process, function, file path or library argument is accepted.
+Fault variants never enter the `dlopen` test.
+
+Owner-initiated M3 commands, after unpacking the new matching artifact:
+
+```bash
+python3 run-on-m3.py YOUR_ADB_SERIAL --fault-case signal
+python3 run-on-m3.py YOUR_ADB_SERIAL --fault-case timeout
+```
+
+Run each separately and capture the full output. The expected result is
+`EXPECTED ...` + `STATE=QUARANTINE; SAFE_TO_RETRY=false` +
+`SCOPED TEST TARGET SIGKILL REQUESTED` and the runner's
+`TEST-ONLY CLEANUP COMPLETE`. This is an **expected fault classification**
+pass, not proof of successful recovery of an arbitrary service. If unexpected
+output or device loss occurs, do not retry automatically; inspect the owned
+test process state and preserve logs. Signal, timeout and post-kill process
+reaping require independent M3 confirmation before declaring the gate closed.
+
+**Do NOT use this on Bluetooth or any process other than the fixed,
+independently started test executable.** In particular this does not show
+that an interrupted Bionic linker operation can be rolled back. Live
+Bluetooth injection remains NO-GO.
