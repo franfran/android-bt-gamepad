@@ -55,7 +55,7 @@ class Tests(unittest.TestCase):
                 mod.collect("serial")
 
     def test_package_uid_stage_redacted(self):
-        output=self.sample(uid=b"unexpected private OEM format")
+        output=[b"671", status(), b"droid.bluetooth\\n", b"com.android.bluetooth\\x00"] + [b"unexpected private OEM format"] * 3
         with patch.object(mod,"read",side_effect=output):
             with self.assertRaisesRegex(RuntimeError,"stage_package_uid"):
                 mod.collect("serial")
@@ -63,7 +63,7 @@ class Tests(unittest.TestCase):
     def test_generic_error_stage_does_not_include_raw_data(self):
         import io
         from contextlib import redirect_stderr
-        output=self.sample(uid=b"secret OEM data")
+        output=[b"671", status(), b"droid.bluetooth\\n", b"com.android.bluetooth\\x00"] + [b"secret OEM data"] * 3
         with patch.object(mod,"read",side_effect=output):
             error=io.StringIO()
             with redirect_stderr(error):
@@ -72,6 +72,14 @@ class Tests(unittest.TestCase):
         data=json.loads(error.getvalue())
         self.assertEqual(data["failure_stage"],"stage_package_uid")
         self.assertNotIn("secret OEM",error.getvalue())
+
+    def test_package_uid_second_command_fallback(self):
+        responses = [b"671", status(), b"droid.bluetooth\\n", b"com.android.bluetooth\\x00",
+                     b"OEM unknown output", b"package:com.android.bluetooth uid:1002\\n",
+                     status(), b"671"]
+        with patch.object(mod, "read", side_effect=responses):
+            report=mod.collect("serial")
+        self.assertEqual(report["package_process_association"], "CORROBORATED")
 
     def test_cmdline_sanitization(self):
         self.assertEqual(mod.cmdline_category(b"com.android.bluetooth\x00--secret"),
