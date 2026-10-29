@@ -11,3 +11,7 @@ Before *any* actual Bluetooth `dlopen`: validate independent device control if B
 Staging cleanup (`stage.py <ADB_SERIAL> cleanup`) only removes the staged inert add-on; it does **not** unload already mapped code. A non-persistent injected library normally leaves the process when that process exits, but restarting a service is disruptive and does not necessarily repair arbitrary corrupted process state. Never promise unconditional rollback.
 
 Public Git history should not contain raw HCI snoop logs, PIN/LinkKeys, actual device MACs, local home address/IP, signed vendor APKs or `.so` files, or secrets. Audit files have been selected/sanitized; retain originals privately. Some old research scripts are archived for provenance and are **not automatically safe** for future systems.
+
+## C4C-3 design review (2026-10-28)
+
+The documented safety assessment is [S7-C4C-3-HAZARD-ASSESSMENT.md](S7-C4C-3-HAZARD-ASSESSMENT.md). PR #3/#4/#5 prove controlled **test-process** normal, signal and timeout paths on M3; they do not establish production linker namespace acceptance or independent recovery from a partially entered `dlopen`. Before any Bluetooth trial the owner must verify independent wired control, review an explicit one-shot restart/recovery plan and fresh target identity/namespace evidence. C4C-3 remains **NO-GO** until those requirements are reviewed. This documentation does not authorize service restart or injection.
