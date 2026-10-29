@@ -56,3 +56,20 @@ Code: `experiments/s7-c4c/` in [PR #3](https://github.com/franfran/android-bt-ga
 **Critical limitation:** The very first remote call returns through `rbxc4c_return_trap`, specially compiled into the test target. Later remote calls use a target-private RX return trampoline. Actual `com.android.bluetooth` has **no built-in test trap**. A target-independent, ARM/Thumb-safe bootstrap plus independently verified service recovery/namespace behavior is still required. No remote `dlopen` was performed on Bluetooth. This is a real target-specific parity milestone, not proof of safe production injection.
 
 Next work: investigate a **target-independent bootstrap** in a similarly independently started non-Bluetooth test process (without its precompiled return-trap), then separately assess linker namespace and an out-of-band service recovery procedure; avoid claiming register restoration unblocks a stuck linker. Do not reuse the retired `bt_inert_inject` tool.
+
+## Continuation after PR #3: ARM SVC bootstrap candidate (not yet measured)
+
+A separate stacked experimental branch `feat/s7-c4c-svc-bootstrap-test`
+removes controller dependence on the test target's precompiled BKPT return
+address for its first remote syscall. It selects a verified ARM `svc #0`
+instruction in the standalone test ELF, uses tagged `ptrace` syscall stops
+for remote `mmap2/mprotect/munmap`, and keeps the private RX BKPT trampoline
+for test-only remote `dlopen` return. The original target still includes
+unused test helper symbols; this is a controller independence test, **not**
+proof of arbitrary real-service injection.
+
+**Status: source experiment pending compilation/CI and physical M3 retest.**
+Record syscall entry/exit stop identities, signal handling, register restore,
+negative/positive `dlopen`, memory cleanup, and worker progression before
+claiming C4C-2 parity for the new approach. Independent recovery and namespace
+acceptance are separate gates; production Bluetooth stays NO-GO.
