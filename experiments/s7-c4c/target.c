@@ -41,6 +41,19 @@ __attribute__((used,noinline,visibility("default"),naked)) void rbxc4c_mprotect(
 __attribute__((used,noinline,visibility("default"),naked)) void rbxc4c_munmap(void){asm volatile("mov r7,#91\n svc #0\n bx lr\n");}
 __attribute__((used,noinline,visibility("default"))) void *rbxc4c_load(const char *path){return dlopen(path,2);}
 __attribute__((used,noinline,visibility("default"))) char *rbxc4c_error(void){return dlerror();}
+/* Deliberate failure-path probes, only reachable in the fixed test ELF.
+ * These never interact with Bluetooth or load any additional code. */
+__attribute__((used,noinline,visibility("default"),noreturn))
+void rbxc4c_fault_spin(void){
+ for(;;)asm volatile("" ::: "memory");
+}
+__attribute__((used,noinline,visibility("default"),noreturn))
+void rbxc4c_fault_signal(void){
+ int pid=sys1(20,0); /* ARM getpid */
+ int tid=sys1(224,0); /* ARM gettid */
+ sys3(268,pid,tid,10); /* ARM tgkill(SIGUSR1) on the traced leader */
+ for(;;)sys1(29,0); /* Fallback pause if signal is not delivered */
+}
 __attribute__((noreturn)) void _start(void){
   mark("TARGET STARTED\n");
   if(sys2(172,15,(int)process_name)<0){ /* PR_SET_NAME */
