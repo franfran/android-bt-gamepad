@@ -45,3 +45,31 @@ Tests (host only): `python3 -m unittest discover -s experiments/s7-c4c-health/te
    read-only utility never carries out a recovery action.
 
 See `docs/S7-C4C-3-HAZARD-ASSESSMENT.md` for the governing NO-GO gate.
+
+## Wi-Fi-first recovery readiness (observation only)
+
+After confirming that `adb devices -l` lists the current Wi-Fi ADB serial
+as `device`, run from the Mac repository checkout:
+
+```bash
+python3 experiments/s7-c4c-health/read-only-readiness.py YOUR_ADB_SERIAL
+```
+
+The script confirms the selected ADB transport is currently ready, then
+reuses the bounded read-only Bluetooth identity/mapping health check. It
+reports only generic `wifi_adb` vs `usb_or_local_adb` classification and
+whether **an alternate ADB device** is listed; it never prints a serial,
+MAC, network address, PID, maps or recovery command. Enumeration of an
+alternate device **does not prove** it is the M3 USB port, nor that it
+will work during service failure. The owner separately confirmed wired
+USB ADB works normally.
+
+**Policy:** Wi-Fi ADB first for observation and abort decisions; prevent
+disruption wherever possible; USB ADB only as last-resort recovery access.
+No service kill/restart, no writes, no test crash, no Bluetooth injection
+or auto-retry. The report always says `decision=NO_GO`,
+`recovery_action_executed=false`, with namespace and transport survival
+marked `UNVERIFIED`. Any future service recovery action requires its own
+owner-approved procedure, not just this readiness PASS.
+
+Host test: `python3 -m unittest discover -s experiments/s7-c4c-health/tests -v`.
