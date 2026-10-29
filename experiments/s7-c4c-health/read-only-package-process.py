@@ -35,13 +35,13 @@ def parse_status(raw):
     return values
 
 def package_uid(raw):
-    text = raw.decode("utf-8", "replace").replace("\\r", "")
+    text = raw.decode("utf-8", "replace").replace("\r", "")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines or len(lines) > 128:
         raise ValueError("package_uid_format")
     matches = []
     for line in lines:
-        match = re.fullmatch(r"package:([A-Za-z0-9_.]+)\\s+uid:(\\d+)", line)
+        match = re.fullmatch(r"package:([A-Za-z0-9_.]+)\s+uid:(\d+)", line)
         if not match:
             raise ValueError("package_uid_format")
         if match.group(1) == PACKAGE:
