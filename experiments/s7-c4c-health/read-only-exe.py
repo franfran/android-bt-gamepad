@@ -27,7 +27,7 @@ def status(raw):
 
 def exe_class(path):
     # Readlink evidence is never emitted. Keep coarse categories only.
-    path=path.removesuffix(" (deleted)")
+    path=path[:-10] if path.endswith(" (deleted)") else path
     if path in ("/system/bin/app_process32","/system/bin/app_process64",
                 "/system/bin/app_process"):
         return "APP_PROCESS_BINARY"
