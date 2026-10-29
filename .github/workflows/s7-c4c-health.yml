@@ -12,5 +12,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify Python 3.8 compatible syntax and unit tests
         run: |
-          python3 -m py_compile experiments/s7-c4c-health/read-only-health.py experiments/s7-c4c-health/read-only-readiness.py
+          python3 -m py_compile experiments/s7-c4c-health/read-only-health.py experiments/s7-c4c-health/read-only-readiness.py experiments/s7-c4c-health/read-only-linkerconfig.py
           python3 -m unittest discover -s experiments/s7-c4c-health/tests -v
