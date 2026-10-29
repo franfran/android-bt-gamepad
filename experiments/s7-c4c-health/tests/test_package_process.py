@@ -54,6 +54,25 @@ class Tests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 mod.collect("serial")
 
+    def test_package_uid_stage_redacted(self):
+        output=self.sample(uid=b"unexpected private OEM format")
+        with patch.object(mod,"read",side_effect=output):
+            with self.assertRaisesRegex(RuntimeError,"stage_package_uid"):
+                mod.collect("serial")
+
+    def test_generic_error_stage_does_not_include_raw_data(self):
+        import io
+        from contextlib import redirect_stderr
+        output=self.sample(uid=b"secret OEM data")
+        with patch.object(mod,"read",side_effect=output):
+            error=io.StringIO()
+            with redirect_stderr(error):
+                code=mod.main(["serial"])
+        self.assertEqual(code,2)
+        data=json.loads(error.getvalue())
+        self.assertEqual(data["failure_stage"],"stage_package_uid")
+        self.assertNotIn("secret OEM",error.getvalue())
+
     def test_cmdline_sanitization(self):
         self.assertEqual(mod.cmdline_category(b"com.android.bluetooth\x00--secret"),
                          "EXACT_PACKAGE_PROCESS_NAME")
