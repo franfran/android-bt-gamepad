@@ -54,26 +54,27 @@ def cmdline_category(raw):
         return "UNKNOWN"
     return "OTHER_PROCESS_NAME"
 
+def safe_step(label, fn):
+    try:
+        return fn()
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired):
+        raise RuntimeError("stage_" + label)
+
+
 def collect(serial):
     if not serial or len(serial) > 128 or serial.startswith("-"):
         raise ValueError("invalid serial")
-    stage = "pid_lookup"
-    first = parse_pid(read(serial, "pidof com.android.bluetooth", True))
-    stage = "process_identity"
-    status1 = parse_status(read(serial, "cat /proc/" + first + "/status", True))
-    comm = read(serial, "cat /proc/" + first + "/comm", True).decode("utf-8", "replace").strip()
+    first = safe_step("pid", lambda: parse_pid(read(serial, "pidof com.android.bluetooth", True)))
+    status1 = safe_step("identity", lambda: parse_status(read(serial, "cat /proc/" + first + "/status", True)))
+    comm = safe_step("identity", lambda: read(serial, "cat /proc/" + first + "/comm", True).decode("utf-8", "replace").strip())
     if status1["Pid"] != int(first) or status1["Uid"] != 1002 or status1["TracerPid"] != 0 or comm != "droid.bluetooth":
-        raise ValueError("Bluetooth process identity mismatch")
-    stage = "process_cmdline"
-    name = cmdline_category(read(serial, "cat /proc/" + first + "/cmdline", True))
-    stage = "package_uid_lookup"
-    try:
-        uid = package_uid(read(serial, "pm list packages -U com.android.bluetooth"))
-    except (ValueError, RuntimeError):
-        raise ValueError("package_uid_lookup_unavailable")
-    status2 = parse_status(read(serial, "cat /proc/" + first + "/status", True))
-    if parse_pid(read(serial, "pidof com.android.bluetooth", True)) != first or status1 != status2:
-        raise ValueError("Bluetooth process changed during inspection")
+        raise RuntimeError("stage_identity")
+    name = safe_step("cmdline", lambda: cmdline_category(read(serial, "cat /proc/" + first + "/cmdline", True)))
+    uid = safe_step("package_uid", lambda: package_uid(read(serial, "pm list packages -U com.android.bluetooth")))
+    status2 = safe_step("revalidation", lambda: parse_status(read(serial, "cat /proc/" + first + "/status", True)))
+    last = safe_step("revalidation", lambda: parse_pid(read(serial, "pidof com.android.bluetooth", True)))
+    if last != first or status1 != status2:
+        raise RuntimeError("stage_revalidation")
     uid_matches = uid == status1["Uid"]
     strong = uid_matches and name == "EXACT_PACKAGE_PROCESS_NAME"
     return {
@@ -97,9 +98,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         report = collect(args.adb_serial)
-    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired):
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        stage_name = str(exc) if str(exc) in ("stage_pid", "stage_identity", "stage_cmdline", "stage_package_uid", "stage_revalidation") else "stage_other"
         report = {"stage": "S7-C4C-3", "mode": "READ_ONLY_PACKAGE_PROCESS_ASSOCIATION",
                   "error": "read-only package/process lookup unavailable",
+                  "failure_stage": stage_name,
                   "injection_authorized": False, "decision": "NO_GO"}
         print(json.dumps(report, sort_keys=True), file=sys.stderr)
         return 2
