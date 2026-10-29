@@ -193,18 +193,31 @@ def cleanup(serial, candidates):
             # Revalidate immediately before kill; do not act on stale pidfile.
             if is_owned_target(serial, pid):
                 root(serial, 'kill -9 %d' % pid)
-    remaining = [pid for pid in pidof_candidates(serial) if is_owned_target(serial, pid)]
+    # The controller may only have *requested* SIGKILL. Require independent
+    # host-side disappearance evidence before reporting test success.
+    deadline = time.monotonic() + 3
+    remaining = []
+    while True:
+        remaining = [pid for pid in pidof_candidates(serial)
+                     if is_owned_target(serial, pid)]
+        if not remaining or time.monotonic() >= deadline:
+            break
+        time.sleep(0.15)
     if remaining:
-        print('CLEANUP WARNING: verified target remains; test dir preserved', file=sys.stderr)
-    else:
-        root(serial, 'rm -rf ' + REMOTE)
-        print('TEST-ONLY CLEANUP COMPLETE')
+        print('CLEANUP WARNING: verified target remains; test dir preserved',
+              file=sys.stderr)
+        return False
+    root(serial, 'rm -rf ' + REMOTE)
+    print('TEST-ONLY CLEANUP COMPLETE')
+    return True
 
 
 def run(serial, fault_case='normal'):
     candidates = set()
     session = None
     cleanup_allowed = True
+    outcome = 2
+    cleanup_ok = True
     try:
         adb(serial, 'shell', 'mkdir', '-p', REMOTE)
         # Enforce single-test state: refuse to trample another running target.
@@ -245,22 +258,28 @@ def run(serial, fault_case='normal'):
         else:
             print('S7-C4C TEST-ONLY %s FAULT = EXPECTED QUARANTINE (NOT Bluetooth authorization)'
                   % fault_case.upper())
-        return 0
+        outcome = 0
     except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
         print('FAIL CLOSED:', exc, file=sys.stderr)
         if session is not None and session.poll() is not None:
             print('TARGET SESSION EXIT STATUS:', session.returncode, file=sys.stderr)
-        return 2
+        outcome = 2
     finally:
         try:
             if cleanup_allowed:
-                cleanup(serial, candidates)
+                cleanup_ok = cleanup(serial, candidates)
             else:
+                cleanup_ok = False
                 print('PRE-EXISTING TEST PROCESS PRESERVED; NO CLEANUP', file=sys.stderr)
         except (RuntimeError, subprocess.TimeoutExpired) as exc:
+            cleanup_ok = False
             print('CLEANUP WARNING:', exc, file=sys.stderr)
         finally:
             stop_host_session(session)
+    if not cleanup_ok:
+        print('FAIL CLOSED: verified test-target cleanup not established', file=sys.stderr)
+        return 2
+    return outcome
 
 
 if __name__ == '__main__':
