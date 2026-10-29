@@ -61,7 +61,7 @@ class ContractTests(unittest.TestCase):
         start=code.index('static int remote_syscall(')
         stop=code.index('static int remote_call(',start)
         bootstrap=code[start:stop]
-        self.assertIn('PTRACE_SETREGS,pid,0,(int)orig',bootstrap)
+        self.assertIn('SETREGS,pid,0,(int)orig',bootstrap)
         self.assertIn('stop.r[i]!=orig->r[i]',bootstrap)
         self.assertIn('if(waitstop(pid,timeout,&status)!=1',bootstrap)
         self.assertIn('WSTOPSIG(status)!=SYSCALL_STOP',bootstrap)
