@@ -127,7 +127,7 @@ Download the complete artifact with `run-on-m3.py` and `README.md` included;
 the original four-file artifact was incomplete. This remains a test-only
 experiment, not a Bluetooth injection command or merge authorization.
 
-## S7-C4C fault-path qualification — PR #5 (NOT YET M3 TESTED)
+## S7-C4C fault-path qualification — PR #5 (M3 fault modes PASS)
 
 This follow-up is a **separate test-only branch stacked on PR #4**. CI
 builds three different controllers for the fixed `rbxc4c_target` and the
@@ -160,10 +160,28 @@ Run each separately and capture the full output. The expected result is
 `TEST-ONLY CLEANUP COMPLETE`. This is an **expected fault classification**
 pass, not proof of successful recovery of an arbitrary service. If unexpected
 output or device loss occurs, do not retry automatically; inspect the owned
-test process state and preserve logs. Signal, timeout and post-kill process
-reaping require independent M3 confirmation before declaring the gate closed.
+test process state and preserve logs. Both fixed fault modes now have operator-provided M3 confirmation of expected
+classification and test-runner cleanup. This does not establish production
+service-recovery safety.
 
 **Do NOT use this on Bluetooth or any process other than the fixed,
 independently started test executable.** In particular this does not show
 that an interrupted Bionic linker operation can be rolled back. Live
 Bluetooth injection remains NO-GO.
+
+### Real M3 results (2026-10-28)
+
+Using matching eight-file CI artifact `12867485949` from Actions
+`40803809282`, both commands above returned the expected outcomes:
+
+| Fixed mode | M3 measured classification | Evidence |
+| --- | --- | --- |
+| `signal` | `SIGUSR1 DELIVERY STOP REJECTED; NO RESUME OR RETRY` | Quarantine, `SAFE_TO_RETRY=false`, scoped test kill requested, `TEST-ONLY CLEANUP COMPLETE` |
+| `timeout` | `NONRETURNING TEST CALL QUARANTINED; NO RESUME OR RETRY` | Quarantine, `SAFE_TO_RETRY=false`, scoped test kill requested, `TEST-ONLY CLEANUP COMPLETE` |
+
+Both independently started 48-worker test processes, selected ARM SVC,
+allocated target-owned scratch, and verified the RX return trampoline
+before the fault. See `docs/STATUS.md` for the exact terminal lines and
+PID/ASLR snapshots. **No arbitrary real-process injection or actual
+`dlopen` stall was exercised** in these cases. All Bluetooth-specific
+linker, namespace and independent recovery gates remain NO-GO.
