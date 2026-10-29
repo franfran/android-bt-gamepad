@@ -46,3 +46,11 @@ Raw results shared by operator are authoritative over README files written befor
 Operator ran `experiments/s7-c4c/run-on-m3.py` v3 (PR #3) and supplied the complete M3 stdout. Measured: `TARGET READY: PID=4423, 48 workers, identity verified; ADB session alive`; `TARGET_IDENTITY_CONFIRMED; load_bias=0x03a71000`; target-private `MMAP2 OK`; `RX RETURN TRAMPOLINE VERIFIED`; missing library `DLOPEN NULL` plus nonempty `DLERROR`; inert test module mapped; canaries intact; background workers progressed; remote `MUNMAP` completed; `PASS: non-fork independent ARM32 target call`; test-only cleanup complete. PID/base are **snapshots**, not reusable constants.
 
 **Interpretation:** cross-process loader parity proven in a separately started, instrumented ARM32 test process on M3. The initial bootstrap still relies on a BKPT symbol compiled into that test target, and its success does not establish an arbitrary-process bootstrap, Bluetooth linker namespace, a recovery procedure for stalled real Bluetooth `dlopen`, or wireless DS3 pairing. Live Bluetooth injection remains NO-GO. Earlier v1/v2 startup failures were not remote-call failures; v3 switched to a persistent ADB foreground target session and target-written PID.
+
+## Pending follow-up experiment (not M3 evidence)
+
+The stacked `feat/s7-c4c-svc-bootstrap-test` branch proposes target-image
+ARM `SVC` syscall-stop bootstrap to eliminate dependency on the special
+test-target return trap for initial memory allocation. **Not yet verified on
+M3.** The PR #3 M3 PASS remains attributed only to its original test-target
+trap bootstrap. No Bluetooth execution or DS3 pairing change is authorized.
