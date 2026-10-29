@@ -43,7 +43,9 @@ Before any GO decision, independently establish the applicable target namespace 
 
 ## 4. Independent recovery requirements (operator checklist; DO NOT RUN YET)
 
-- [ ] Confirm **physical wired USB ADB or equivalent independent channel** that remains connected when Bluetooth is disabled or crashed; record only a redacted test result.
+- [x] **Owner-observed USB ADB enumeration:** Mac `adb devices -l` showed a USB-connected M3 (2026-10-28). This verifies an available wired debugging channel in the normal state, **not** connectivity during a Bluetooth crash or end-to-end recovery.
+- [ ] Verify that Wi-Fi ADB remains reachable during a separately authorized benign Bluetooth-service outage; do **not** induce an outage in this gate.
+- [ ] If primary Wi-Fi ADB fails, use the owner-verified USB ADB only as a last-resort fallback (not the default recovery workflow).
 - [ ] On that channel, independently measure Bluetooth process health and service state before disruption; confirm reidentification after a *benign*, owner-approved test, without performing a restart here.
 - [ ] Define the exact owner-local, platform-appropriate service restart mechanism and expected collateral effects; have a second operator-approved recovery route when restart fails. Keep device power access.
 - [ ] Specify post-recovery checks: service process UID/name newly resolved, thread count, adapter functional state, unrelated Bluetooth devices remain usable, no unexpected injected map, no persistent boot hook or filesystem change.
@@ -67,3 +69,7 @@ A future C4C-4 trial would require separate written owner consent and a reviewed
 ## Read-only operator baseline (2026-10-28)
 
 The owner executed the fixed `experiments/s7-c4c-health/read-only-health.py` on M3 through existing Wi-Fi ADB and supplied sanitized JSON. Verified: Bluetooth process identity, UID 1002 match, 48 threads, no tracer, mapped `libbluetooth.so`, Bionic runtime/linker mapping present, RetroBox add-on not mapped. **No PID, MAC, full mappings, local IP or raw logs are included here.** This establishes a useful undisturbed-process health baseline, **not** a transport failover/recovery exercise. The tool correctly reports `linker_namespace_acceptance=UNVERIFIED`, `independent_recovery=UNVERIFIED`, `injection_authorized=false`. Live execution stays NO-GO.
+
+## Owner transport preference (2026-10-28)
+
+Owner confirmed Mac ADB enumerates the M3 over USB and explicitly requested **best effort to avoid wired recovery**. Priority: (1) preserve ordinary Bluetooth and normal Wi-Fi ADB operation; (2) halt/observe and use Wi-Fi ADB for read-only diagnosis where reachable; (3) only consider a service recovery action under a separately approved, device-specific playbook; (4) use USB ADB if network access fails or becomes unreliable; (5) physical device controls as fallback. No automated service killing, restart or repeated injection. Wired USB availability reduces risk but does not make a live `dlopen` reversible or authorize it.
