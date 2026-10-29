@@ -1,9 +1,10 @@
 /* RetroBox S7-C4C (C4C-1/2) cross-process ARM32 test controller.
  * STRICTLY TEST TARGET ONLY: independently launched rbxc4c_target.
  * Never attaches to Bluetooth and cannot accept arbitrary PID or path.
- * The first return trap is resolved from target ELF; following calls
- * use an RX target-private trampoline. This bootstrap is NOT a
- * general Bluetooth injector: Bluetooth lacks the target test symbols.
+ * Test-only SVC instruction found in the executable target text bootstraps
+ * mmap2/mprotect/munmap via ptrace syscall-stop (no target BKPT stub).
+ * Regular calls return through a target-private RX trampoline. No Bluetooth
+ * namespace/recovery evidence is established by this experiment.
  * SPDX-License-Identifier: MIT
  */
 typedef unsigned int u32;
@@ -23,6 +24,10 @@ typedef int i32;
 #define SETREGS 13
 #define CONT 7
 #define DETACH 17
+#define PTRACE_SYSCALL 24
+#define PTRACE_SETOPTIONS 0x4200
+#define PTRACE_TRACESYSGOOD 1
+#define SYSCALL_STOP (SIGTRAP|0x80)
 #define SIGTRAP 5
 #define SIGKILL 9
 #define WNOHANG 1
@@ -81,6 +86,54 @@ static int poke(int pid,u32 addr,u32 val){return sc4(PTRACE,POKEDATA,pid,(int)ad
 static int write_string(int pid,u32 addr,const char*s){int len=str_len(s)+1;for(int i=0;i<len;i+=4){u32 value=0,read=0;for(int j=0;j<4;j++){if(i+j<len)value|=((u32)(unsigned char)s[i+j])<<(8*j);}if(!poke(pid,addr+i,value)||!peek(pid,addr+i,&read)||read!=value)return 0;}return 1;}
 static int waitstop(int pid,int timeout,int *status){int end=millis()+timeout;while(millis()<end){int r=sc4(114,pid,(int)status,WNOHANG|WALL,0);if(r==pid)return STOPPED(*status)?1:-1;if(r<0)return -2;sleep_ms(10);}return 0;}
 static int copyregs(struct regs*d,const struct regs*s){for(int i=0;i<18;i++)d->r[i]=s->r[i];return 1;}
+/* Test target only: locate a real ARM-state SVC #0 (EF000000) in its
+ * own read/execute image. No executable text is modified and no prebuilt
+ * target-specific return-trap or syscall wrapper is called. A shared/Thumb
+ * or non-test target is never eligible. */
+static u32 find_syscall_site(int pid){
+ int n=maps_read(pid);if(n<0)return 0;
+ for(int i=0;i<n;){
+  int start=i;while(i<n&&maps_buf[i]!='\n')i++;int end=i++;
+  if(!contains(maps_buf+start,end-start,DIR "rbxc4c_target"))continue;
+  u32 lo=from_hex(maps_buf+start);int j=start;
+  while(j<end&&maps_buf[j]!='-')j++;
+  if(j>=end)continue;
+  u32 hi=from_hex(maps_buf+j+1);
+  while(j<end&&maps_buf[j]!=' ')j++;
+  while(j<end&&maps_buf[j]==' ')j++;
+  if(j+2>=end||maps_buf[j]!='r'||maps_buf[j+2]!='x')continue;
+  u32 addr=(lo+3u)&~3u;
+  for(int k=0;addr<hi&&k<16384;addr+=4u,k++){
+   u32 instruction=0;
+   if(!peek(pid,addr,&instruction))return 0;
+   if(instruction==0xef000000u)return addr;
+  }
+ }
+ return 0;
+}
+/* PTRACE_O_TRACESYSGOOD distinguishes entry/exit syscall-stops from real
+ * signals. Failures are indeterminate; caller kills ONLY the owned test
+ * process rather than detaching it with uncertain kernel state. */
+static int remote_syscall(int pid,const struct regs*orig,u32 site,int nr,
+                          const u32 args[6],int timeout,u32*result){
+ struct regs r,stop;int status=0;
+ copyregs(&r,orig);
+ for(int i=0;i<6;i++)r.r[i]=args[i];
+ r.r[7]=(u32)nr;r.r[15]=site;r.r[16]&=~0x20u; /* ARM state */
+ r.r[17]=0xffffffffu;
+ if(sc4(PTRACE,SETREGS,pid,0,(int)&r)<0)return -1;
+ for(int phase=0;phase<2;phase++){
+  if(sc4(PTRACE,PTRACE_SYSCALL,pid,0,0)<0)return -2;
+  if(waitstop(pid,timeout,&status)!=1||WSTOPSIG(status)!=SYSCALL_STOP)return -3;
+  if(sc4(PTRACE,GETREGS,pid,0,(int)&stop)<0)return -4;
+  if(stop.r[7]!=(u32)nr||stop.r[15]<site||stop.r[15]>site+8u)return -5;
+ }
+ *result=stop.r[0];
+ if(sc4(PTRACE,SETREGS,pid,0,(int)orig)<0)return -6;
+ if(sc4(PTRACE,GETREGS,pid,0,(int)&stop)<0)return -7;
+ for(int i=0;i<18;i++)if(stop.r[i]!=orig->r[i])return -8;
+ return 1;
+}
 /* Return only after verified SIGTRAP AND PC at expected target trap.
  * NEVER resume a stalled/indeterminate call in this demo. Test-target kill only. */
 static int remote_call(int pid,const struct regs*orig,u32 fn,u32 trap,const u32 args[6],int timeout,u32*result){
@@ -121,11 +174,9 @@ static int run(void){
  output("TEST TARGET ONLY: NO BLUETOOTH, NO SYSTEM LIBRARY MODIFICATION\n");
  int pid=filepid();if(pid<1||!validate_target(pid,0)){output("FAIL CLOSED: test target identity/UID/thread check\n");return 2;}
  u32 base=target_base(pid);if(!base){output("FAIL CLOSED: test target PIE base missing\n");return 2;}
- u32 bootstrap=base+OFF_RBXC4C_RETURN_TRAP, mapfn=base+OFF_RBXC4C_MMAP2;
- u32 protfn=base+OFF_RBXC4C_MPROTECT,unmapfn=base+OFF_RBXC4C_MUNMAP;
  u32 loadfn=base+OFF_RBXC4C_LOAD;
- if(!address_exec(pid,bootstrap)||!address_exec(pid,mapfn)||!address_exec(pid,protfn)||!address_exec(pid,unmapfn)||!address_exec(pid,loadfn)){
-  output("FAIL CLOSED: target function not executable / invalid PIE address\n");return 2;
+ if(!address_exec(pid,loadfn)){
+  output("FAIL CLOSED: target load function not executable / invalid PIE address\n");return 2;
  }
  output("TARGET_IDENTITY_CONFIRMED; load_bias=");hex(base);output("\n");
  int attached=0,stopped=0,status=0;u32 scratch=0;int fail=1,phase=0;struct regs orig;
@@ -137,19 +188,27 @@ static int run(void){
  if(sc4(PTRACE,GETREGS,pid,0,(int)&orig)<0 || (orig.r[13]&7u)){
   output("FAIL: target stack ABI/regs\n");goto done;
  }
+ u32 svc=find_syscall_site(pid);
+ if(!svc||!address_exec(pid,svc)){
+  output("FAIL CLOSED: no verified ARM SVC in test executable\n");goto done;
+ }
+ if(sc4(PTRACE,PTRACE_SETOPTIONS,pid,0,PTRACE_TRACESYSGOOD)<0){
+  output("FAIL CLOSED: syscall-stop tagging unavailable\n");goto done;
+ }
+ output("TEST IMAGE ARM SVC BOOTSTRAP SELECTED\n");
  /* Four private pages: guard | RW data | RX trampoline | guard. */
  u32 args[6]={0,MAP_PAGES*PAGE,0,0x22,0xffffffffu,0};u32 res=0;
- if(remote_call(pid,&orig,mapfn,bootstrap,args,1500,&res)!=1)goto done;
+ if(remote_syscall(pid,&orig,svc,192,args,2500,&res)!=1)goto done;
  if(res>=0xfffff001u||(res&(PAGE-1u))){output("FAIL: mmap2\n");goto done;}
  scratch=res;phase=1;
  output("TARGET-PRIVATE MMAP2 OK\n");
  args[0]=scratch+PAGE;args[1]=PAGE*2;args[2]=3;args[3]=args[4]=args[5]=0;
- if(remote_call(pid,&orig,protfn,bootstrap,args,1500,&res)!=1||res!=0)goto done;
+ if(remote_syscall(pid,&orig,svc,125,args,2500,&res)!=1||res!=0)goto done;
  /* Page 2 holds ARM BKPT #0 + BX LR, no Thumb pointer ambiguity. */
  if(!poke(pid,scratch+PAGE*2,0xe1200070u)||!poke(pid,scratch+PAGE*2+4,0xe12fff1eu))goto done;
  u32 check=0;if(!peek(pid,scratch+PAGE*2,&check)||check!=0xe1200070u)goto done;
  args[0]=scratch+PAGE*2;args[1]=PAGE;args[2]=5;
- if(remote_call(pid,&orig,protfn,bootstrap,args,1500,&res)!=1||res!=0)goto done;
+ if(remote_syscall(pid,&orig,svc,125,args,2500,&res)!=1||res!=0)goto done;
  u32 trap=scratch+PAGE*2;
  if(!address_exec(pid,trap)){output("FAIL: RX trap not executable\n");goto done;}
  output("TARGET-OWNED RX RETURN TRAMPOLINE VERIFIED\n");
@@ -183,13 +242,12 @@ static int run(void){
  sleep_ms(150);
  if(!peek(pid,base+OFF_RBXC4C_TICKS,&tick_after)||tick_after<=tick_before){output("FAIL: worker progression\n");goto done;}
  output("BACKGROUND WORKERS PROGRESSED WHILE LEADER TRACED\n");
- /* Return to bootstrap trap because unmapping trampoline from within itself
-  * would race the instruction stream. */
+ /* SVC is in target image, never the mapping being unmapped. */
  args[0]=scratch;args[1]=MAP_PAGES*PAGE;args[2]=args[3]=args[4]=args[5]=0;
- rc=remote_call(pid,&orig,unmapfn,bootstrap,args,1500,&res);
+ rc=remote_syscall(pid,&orig,svc,91,args,2500,&res);
  if(rc!=1||res!=0){output("FAIL: private scratch unmap\n");goto done;}
  scratch=0;
- output("REMOTE MUNMAP COMPLETED; RETURNED VIA TARGET-IMAGE BOOTSTRAP\n");
+ output("REMOTE MUNMAP COMPLETED VIA TARGET-IMAGE SVC BOOTSTRAP\n");
  if(sc4(PTRACE,DETACH,pid,0,0)<0){output("FAIL: detach\n");goto done;}
  stopped=0;attached=0;
  output("PASS: non-fork independent ARM32 target call, RX trampoline, dlopen negative/positive, cleanup\n");
