@@ -1,5 +1,8 @@
 # S8 — DualShock 3 support without live Bluetooth process injection
 
+> **Owner correction (2026-10-29):** The original project objective is **wireless DS3 using the M3's existing onboard Bluetooth**. Before this repository was created, the owner already verified that the wired DS3 fully works in RetroArch with `RetroBox_DS3_M3.cfg`, including button remapping. The newly supplied USB `dumpsys input` corroborates known behavior; it is **not** a new blocker or a reason to pivot to wired play. The prior accepted direction was to preserve the existing AIC HAL, Android Fluoride/HID/InputManager, and explore narrowly scoped DS3 cable-assisted Bluetooth pairing compatibility (informed by BlueZ Sixaxis/BthPS3), without fake link keys, PIN guessing or broad security weakening. Do not recommend purchasing an external BT adapter or using a permanent external Linux bridge as the primary path. The S7-C4C-3 live-injection safety gate remains NO-GO until independent recovery and caller-namespace/visibility are demonstrated and separately authorized.
+
+
 **Date:** 2026-10-29  
 **Status:** architecture selection / documentation only  
 **Predecessor:** S7-C4C-3 decision review (PR #21), which remains PAUSED / NO-GO for live Bluetooth service modification.
