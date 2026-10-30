@@ -5,25 +5,25 @@ from pathlib import Path
 SHA="4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85"
 # Individual Thumb machine instruction bytes, NEVER runtime patch offsets.
 CHECKS={
- 0x258032:"f894012a", # auth prerequisite state
- 0x258038:"d145", # nonzero diverts
- 0x258042:"8a20", # link handle
- 0x25804a:"d03c", # invalid handle diverts
- 0x2580a2:"8de0", # security flag field
- 0x2580b4:"f00080ec", # conditional alternate
- 0x2580bc:"f8845129", # state=1
+ 0x258032:"94f82a01", # auth prerequisite state
+ 0x258038:"45d1", # nonzero diverts
+ 0x258042:"208a", # link handle
+ 0x25804a:"3cd0", # invalid handle diverts
+ 0x2580a2:"e08d", # security flag field
+ 0x2580b4:"00f0ec80", # conditional alternate
+ 0x2580bc:"84f82951", # state=1
  0x2580c0:"f024fc6a", # call HCI auth sender
- 0x25b5e6:"f88d10af", # save HCI status
- 0x25b78a:"2e2a", # status 0x2a
- 0x25b78e:"2e23", # status 0x23
- 0x25b790:"d10c", # neither => common path
- 0x25b7ba:"f00001fd", # clear security flag
- 0x25b836:"f89a0129", # authentication state
- 0x25b844:"f88a5129", # reset authentication state
- 0x25b848:"2800", # compare status with success
- 0x25b84c:"280c", # special status 0x0c
- 0x25b84e:"d14c", # non-0x0c error
- 0x25b934:"47b8", # guarded callback BLX
+ 0x25b5e6:"8df8af10", # save HCI status
+ 0x25b78a:"2a2e", # status 0x2a
+ 0x25b78e:"232e", # status 0x23
+ 0x25b790:"0cd1", # neither => common path
+ 0x25b7ba:"00f0fd01", # clear security flag
+ 0x25b836:"9af82901", # authentication state
+ 0x25b844:"8af82951", # reset authentication state
+ 0x25b848:"0028", # compare status with success
+ 0x25b84c:"0c28", # special status 0x0c
+ 0x25b84e:"4cd1", # non-0x0c error
+ 0x25b934:"b847", # guarded callback BLX
 }
 def audit(raw,sha=SHA):
     if hashlib.sha256(raw).hexdigest()!=sha:raise ValueError("SHA_MISMATCH")
