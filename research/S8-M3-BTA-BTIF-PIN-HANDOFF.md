@@ -72,3 +72,16 @@ https://android.googlesource.com/platform/packages/modules/Bluetooth/+/fb790450b
 4. All on-device injection, restarts, vendor `.so` replacement, firmware modification and global HID security mask `0x36` reduction remain **NO_GO**. No new wiring or USB baseline testing needed.
 
 **Bottom line:** A distinct, concrete candidate for missing PIN reply is now identified **inside BTA**, including an explicit unregistered-callback guard and a remote-name asynchronous path. This is further upstream than the previous BTM event and deserves differential investigation against HCI remote-name traffic and platform logs.
+
+
+## NEW cross-check: *actual HCI capture* remote-name transactions for the DS3
+
+Independently parsed the 1,789-record `btsnoop_hci(1).log` as HCI UART H4, using raw *six-byte address comparison only in local memory*, never reporting addresses:
+
+- Four PIN Code Request events (`#595, #638, #1655, #1755`) correspond to **the same DS3 peer**.
+- Exactly **two HCI Remote Name Request commands for that peer** were observed, at **records #561 and #578**, both earlier in the capture.
+- Both requests received successful HCI Command Status `0x00` for opcode `0x0419` (records **#566 and #580**). **Command Status success indicates acceptance, NOT completion of the remote name inquiry.**
+- Across the entire 1,789-record capture, **zero HCI Remote Name Request Complete events (event code `0x07`) match the DS3 peer's address**. Other devices produced these events; e.g. #588 is a successful Remote Name Complete **for another peer**, not DS3.
+- There is no proof that every PIN request caused an additional name request. The two DS3 name requests predate all four authentication attempts, and subsequent attempts may have cached/pending internal name state. Missing name-complete is a **specific hypothesis** linking observed HCI and the original ELF deferred-name branch, not a proven causal trace.
+
+**Significance:** The combination of (1) BTA PIN handoff deferring when name is absent and (2) the exact DS3 peer having name requests accepted by controller with no matching completion makes the **remote-name resolution callback** a materially stronger suspect than an abstract Java pairing UI failure. Next source/binary target is the deferred name-request call at `0x137438 → 0x24b804`, its eventual completion callback, and interactions with BTA pairing state. A testable safe design might use a scoped known-name fallback for USB-enrolled DS3, **only if** callback path and recovery safety are later proven; do not implement or inject now.
