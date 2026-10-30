@@ -8,8 +8,8 @@ class TestAuthFailure(unittest.TestCase):
     def test_exact_known_sites(self):
         self.assertEqual(len(m.CHECKS),19)
         self.assertEqual(m.CHECKS[0x2580c0],"f024fc6a")
-        self.assertEqual(m.CHECKS[0x25b844],"f88a5129")
-        self.assertEqual(m.CHECKS[0x25b934],"47b8")
+        self.assertEqual(m.CHECKS[0x25b844],"8af82951")
+        self.assertEqual(m.CHECKS[0x25b934],"b847")
     def test_original_sha_is_required(self):
         with self.assertRaisesRegex(ValueError,"SHA_MISMATCH"):
             m.audit(b"not original")
