@@ -103,3 +103,35 @@ Old Android Fluoride `bta_hh_co_set_rpt_rsp` code has appeared in **more than on
 
 Source for old AOSP stub: https://android.googlesource.com/platform/system/bt/+/b512782fdf214367e0d1f8bb3751420e6cff1d39/btif/co/bta_hh_co.cc
 Source for new conditional branch: https://android.googlesource.com/platform/packages/modules/Bluetooth/+/0861bbd1b84dd8235878bad74fb60a4319ae9cbf/system/btif/co/bta_hh_co.cc
+
+## Next decisive source-of-truth: ORIGINAL installed M3 ELF, not another test library
+
+**Priority correction:** before comparing the 2025 International firmware's native implementation, inspect the **currently installed 2024 M3** `/system/lib/libbluetooth.so`. S8 established its expected SHA-256 as `4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85`. Neither original ELF nor the extracted 2025 ELF is actually mounted in the current research runtime (only original `Bluetooth.apk` is available). An ELF32 ARM synthetic test library validates tooling, **not M3 Bluetooth behavior**.
+
+A source-verified older Fluoride branch includes `UHID_SET_REPORT` only within `#ifdef OS_ANDROID`, forwards its payload via `btif_hh_setreport`, but **does not record the kernel UHID request ID** and has a stub `bta_hh_co_set_rpt_rsp` logging that SET_REPORT_REPLY is unsupported. Meanwhile it **does** maintain a `get_rpt_id_queue` for GET_REPORT. That GET/SET asymmetry is a concrete signature of the historical incomplete implementation, NOT proof that M3 uses it. Evidence:
+https://android.googlesource.com/platform/system/bt/+/b512782fdf214367e0d1f8bb3751420e6cff1d39/btif/co/bta_hh_co.cc
+
+### Owner-run minimum **read-only** acquisition (only if prior original copy is absent)
+
+```sh
+# Mac/Linux; select the existing ADB serial, no system modification
+adb devices
+sh experiments/m3-hid-apk/collect_m3_native_readonly.sh \
+  '<YOUR_EXISTING_ADB_SERIAL>' "$HOME/retrobox-private/m3-native"
+# Expected installed 2024 SHA-256:
+# 4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85
+```
+
+The script only performs an `adb pull /system/lib/libbluetooth.so`, plus an optional `adb exec-out cat /proc/config.gz`. It does NOT run `su`, pair DS3, restart Bluetooth, patch/flash the device, change SELinux or issue HID feature reports. It refuses repository-relative output and existing ELF overwrite. The operator may instead reuse/upload the original **private** `.so` previously supplied for S8; do not publish proprietary binaries in Git. A missing kernel config is nonfatal.
+
+Once the actual 2024 ELF is accessible:
+
+```sh
+python3 experiments/m3-hid-apk/audit_uhid_support.py \
+  --elf "$HOME/retrobox-private/m3-native/m3-original-2024-libbluetooth.so" \
+  --expected-sha256 4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85
+```
+
+This first checks fingerprints, ABI, suspect logging strings and symbolic offline VMA/file-offsets. **Even a positive symbol/marker result is NOT a completed callgraph audit**. Next, original ARM32 disassembly must confirm the per-device `UHID_SET_REPORT` event dispatch, request ID preservation, actual response callback path and `UHID_SET_REPORT_REPLY` write. If it has only the old stub, label third gate FAIL and design a **real response-correlating bridge** offline; never forge ACKs to force driver probe. If full reply behavior is present, mark this bridge conditionally PASS and prioritize native authentication and Java HID admission instead.
+
+The actual ADB step is **optional operator-initiated read-only evidence collection**; the existing S7-C4C-3 prohibition on live injection and device modifications remains unchanged.
