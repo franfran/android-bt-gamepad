@@ -51,3 +51,16 @@ Trace contract: `Message.what==3` -> `handleMessage` case entry `0x0195` -> cond
 A successful BlueZ-style cable-paired native connection would face an independently verified M3 Java bond gate on the case-3 path. **Both native security and Java state policy have to be accounted for**, but there is no requirement to patch Java before demonstrating safe native ingress. An APK-only helper answering zero/guessed PIN still cannot be considered a completed solution.
 
 No runtime operations, firmware modifications, untrusted-controller enrollment or service restart.
+
+## Case 3 branch-level proof: initial connection admission
+
+Follow-up direct disassembly of exact SHA-matched M3 DEX, within `handleMessage` case 3 (`0x0195`):
+- Code-unit `0x01b5` `if-nez v2` goes to `0x01b9` to obtain `Integer.intValue()` for previous HID state; absent map entry takes default path to `0x01bd`.
+- `0x01be` `if-nez v1` branches to `0x01d4` unless previous state is **zero**.
+- `0x01c0` `if-nez v3` branches to `0x01d4` unless incoming native state is **zero**.
+- Only when both are zero does `0x01c4` invoke `okToConnect(device)`; after result conversion `0x01c8` `if-nez v4` goes to `0x01d4` on allow, otherwise calls device-address conversion at `0x01cc` and `access$600` at `0x01d0` (native-disconnect wrapper; name inferred from AOSP comparison, check accessor body separately).
+- For accepted/non-initial cases the other side calls `access$700` and `access$100` at `0x01d6/0x01da` (state broadcast path).
+
+This is **direct proof** that M3 performs a bond-state admission check on the **initial connected** HID state transition (previous 0, native state 0), not merely a generic method which may never be used. Android AOSP labels message code 3 `MESSAGE_CONNECT_STATE_CHANGED`, and its equivalent incoming-connected branch uses the same conditions; M3 bytecode supports the same semantics. This branch is downstream of actual native connection establishment: it does not solve earlier L2CAP auth. No device attempt performed.
+
+References: https://android.googlesource.com/platform/packages/apps/Bluetooth/+/087d9f6a72a7f5ade938c2cbfb23aa01198bb85f/src/com/android/bluetooth/hid/HidHostService.java ; M3 uploaded APK SHA-256 above.
