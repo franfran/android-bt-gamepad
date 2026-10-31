@@ -33,6 +33,12 @@ case "$output" in
     exit 2 ;;
 esac
 
+if command -v git >/dev/null 2>&1 && \
+  [ "$(git -C "$output" rev-parse --is-inside-work-tree 2>/dev/null || true)" = true ]; then
+  printf '%s\\n' 'Refusing private firmware extraction inside a Git worktree.' >&2
+  exit 2
+fi
+
 native="$output/m3-original-2024-libbluetooth.so"
 if [ -e "$native" ] || [ -L "$native" ]; then
   printf '%s\n' "Refusing to overwrite existing file: $native" >&2
