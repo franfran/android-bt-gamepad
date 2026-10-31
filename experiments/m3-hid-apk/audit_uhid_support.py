@@ -36,7 +36,9 @@ def native_summary(data: bytes, *, expected_sha256=None):
         "elf": "ELF32 ARM little-endian",
         "literal_markers": present,
         "candidate_function_symbols": [
-            {"name": sym.name, "vma": f"0x{sym.vma:x}",
+            {"name": sym.name, "symbol_value": f"0x{sym.vma:x}",
+             "instruction_vma": f"0x{sym.instruction_vma:x}",
+             "thumb": sym.thumb,
              "size": sym.size,
              "file_offset": None if sym.file_offset is None else f"0x{sym.file_offset:x}",
              "table": sym.table}
@@ -47,7 +49,9 @@ def native_summary(data: bytes, *, expected_sha256=None):
                     "stripped or worded differently. Determine actual compiled "
                     "UHID_SET_REPORT request/reply behavior by callgraph disassembly. "
                     "Absent symbols or a function VMA alone do not establish "
-                    "function absence, reachable code or safety of runtime hooks."),
+                    "function absence, reachable code or safety of runtime hooks. "
+                    "For Thumb functions, raw ELF symbol value has ISA bit 0 set; "
+                    "instruction_vma and file_offset clear this state bit."),
     }
 
 
