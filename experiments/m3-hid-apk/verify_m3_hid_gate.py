@@ -78,10 +78,35 @@ def verify(path):
     if unplug[0:3] != [0x2070, 0x5FC9, 0x0021]:
         raise AssertionError("virtualUnPlugNative delegate changed")
 
+    # The *return* event for native virtual-unplug is separate from the request
+    # issued by the failed Java HID admission check. Do not conflate them.
+    vup_callback = code(0x26F378)  # onVirtualUnplug([B,I)V
+    if vup_callback[2:7] != [0x0113, 12, 0x206E, 0x124C, 0x0010]:
+        raise AssertionError("native VCU status callback no longer posts message 12")
+    if vup_callback[14:17] != [0x206E, 0x125C, 0x0001]:
+        raise AssertionError("native VCU callback no longer sends Handler message")
+
+    case12pos = payload + 4 + 2 * (12 - 1)
+    if 14 + msg[case12pos] + (msg[case12pos+1] << 16) != 0x007D:
+        raise AssertionError("message-12 virtual-unplug status branch changed")
+    if msg[0x8B:0x8E] != [0x3071, 0x5F88, 0x0102]:
+        raise AssertionError("message-12 broadcast accessor changed")
+    vup_bridge = code(0x26EE30)  # access$1900
+    if vup_bridge != [0x3070, 0x5F9B, 0x0210, 0x000E]:
+        raise AssertionError("VCU status accessor delegate changed")
+
+    vup_broadcast = code(0x26F0C8)  # broadcastVirtualUnplugStatus
+    if vup_broadcast[2:4] != [0x011A, 0x749C]:
+        raise AssertionError("VCU status intent action changed")
+    if vup_broadcast[0x1C:0x1F] != [0x406E, 0x5FBB, 0x1203]:
+        raise AssertionError("VCU status broadcast call changed")
+
     return {"verified_sha256": digest,
             "native_hal_states": states,
             "java_bond_gate": "BOND_BONDED",
             "rejection": "virtualUnPlugNative",
+            "vcu_status_callback": "message 12 -> status broadcast only at this Java branch",
+            "actual_native_vcu_action": "NOT_VERIFIED",
             "actual_DS3_runtime_branch": "NOT_PROVEN"}
 
 
