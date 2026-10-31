@@ -145,3 +145,14 @@ Parsed the old/new `classes4.dex` tables: the class set is identical (4029 class
 The `BluetoothDevice` class is **not defined in `classes4.dex`**, so the byte-identical other DEX entries retain the previously verified `BluetoothDevice.setPin(String)` / `convertPinToBytes(String)` implementation. Combined with the previously confirmed identical `TvSettings.apk`, the **2025 International firmware contains no update to these three inspected pairing components' relevant logic** (TvSettings receiver, Bluetooth APK, framework BluetoothDevice PIN methods). **Do not conclude all possible driver/native modifications or runtime behavior are unchanged:** vendor libraries, boot/vbmeta, configuration and other partitions were not compared.
 
 **Decision:** there is no observed pairing-handler fix in the 2025 International build's inspected Java components; flashing this image solely as a DS3 PIN bug fix is not justified by this evidence. Next research gate is the exact runtime pairing variant or a scoped fix design, with owner approval and rollback protections.
+
+### 2024 M3 Bluetooth APK DEX verification — 2026-10-31
+
+A new direct offline check of **the installed 2024 M3 Bluetooth.apk**, not only upstream AOSP source, parsed `classes.dex` method/class tables and established:
+
+- `Lcom/android/bluetooth/btservice/BondStateMachine$PendingCommandState;->processMessage(Message)`: DEX `code_off=0x239728`, 378 code units. This method references the Android `BluetoothDevice.getBluetoothClass()` → `BluetoothClass.getDeviceClass()` classifier path.
+- Inside this method there are four `invoke-static` references to synthetic `BondStateMachine.access$1300` (instruction indices `0x63`, `0x6e`, `0x8c`, `0x9b`). This synthetic accessor is `code_off=0x23a120` and immediately delegates to `BondStateMachine.sendDisplayPinIntent`. That latter method is `code_off=0x23a440` (58 code units).
+- `BondStateMachine.pinRequestCallback` is present at `code_off=0x23a358` (108 code units); owner logcat established this callback executed twice for DS3. This confirms **the exact vendor Bluetooth APK contains the same main PIN broadcast plumbing** as upstream AOSP, and the 2025 firmware Bluetooth APK is byte-identical.
+- **Evidence boundary:** the above DEX scan has **not yet conclusively traced which accessor call corresponds to DS3 variant 0** and does not print the callback's `min16Digits` argument. The AOSP source uses keyboard special handling and `min16Digits ? PIN_16_DIGITS : PIN`; this is the **source-based expectation**, not a proven exact runtime broadcast. No actual same-session variant value was observed.
+
+Next safest verification is to decode the particular `PIN_REQUEST` switch branch and its register constants, or, if ambiguity remains, use one explicitly approved narrowly-scoped live observation; no need for unrelated system changes.
