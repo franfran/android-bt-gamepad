@@ -55,6 +55,10 @@ This is **not** a claim that DS3 wireless pairing can be solved by arbitrary `00
 | `ro.vendor.build.fingerprint` | `google/raven/raven:12/SP1A.211105.004/chenzanchao04121614:userdebug/release-keys` |
 | `ro.build.version.incremental` | `20240412.161509` |
 | `ro.product.firmware` | `2024041216` |
+| `ro.product.device` | `raven` — reported product identity, not actual chipset |
+| `ro.product.name` | `raven` — not evidence of Google Pixel compatibility |
+| `ro.product.board` | `exdroid` — consistent with Allwinner Android platform naming |
+| `com.oranth.upgradeapplication` version | `versionCode=1`, `versionName=22.08.26`, `minSdk=21`, `targetSdk=29`; application version, **not** OTA firmware release date |
 | `TvSettings` package/version | `com.android.tv.settings` — versionCode=1; versionName=1.0; targetSdk=31 |
 | TV Settings APK | `/system/system_ext/priv-app/TvSettings/TvSettings.apk` |
 | Bluetooth APK | `/system/app/Bluetooth/Bluetooth.apk` |
