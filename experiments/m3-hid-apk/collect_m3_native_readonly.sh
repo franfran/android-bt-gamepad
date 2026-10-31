@@ -17,6 +17,13 @@ command -v adb >/dev/null 2>&1 || {
   exit 1
 }
 
+# Require an explicit absolute location; never accidentally write under the
+# current Git working directory when the operator uses a relative path.
+case "$output" in
+  /*) ;;
+  *) printf '%s\\n' 'Private output directory must be an absolute path.' >&2; exit 2 ;;
+esac
+
 mkdir -p "$output"
 # Refuse a repository-local output location: extracted OEM libraries must not
 # accidentally become Git-tracked or shared in a pull request.
@@ -27,7 +34,7 @@ case "$output" in
 esac
 
 native="$output/m3-original-2024-libbluetooth.so"
-if [ -e "$native" ]; then
+if [ -e "$native" ] || [ -L "$native" ]; then
   printf '%s\n' "Refusing to overwrite existing file: $native" >&2
   exit 1
 fi
@@ -52,7 +59,7 @@ fi
 # Kernel config is optional; many OEM kernels omit /proc/config.gz.
 # Capture only when accessible, and avoid retaining an empty/failure output.
 cfg="$output/m3-kernel.config.gz"
-if [ ! -e "$cfg" ]; then
+if [ ! -e "$cfg" ] && [ ! -L "$cfg" ]; then
   if adb -s "$serial" exec-out cat /proc/config.gz > "$cfg" 2>/dev/null && [ -s "$cfg" ]; then
     printf '%s\n' "Saved optional kernel config: $cfg"
   else
