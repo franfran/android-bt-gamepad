@@ -46,3 +46,35 @@ The optional kernel-config argument can be omitted. Marker presence/absence **ne
 5. Absolutely **do not** issue Feature F4 from a new plugin without first establishing whether kernel already sends it; duplicate injection can create races or unintended device behavior.
 
 **M3 state remains NO_GO for live injection and system file patching.** Existing PR #50 is research-only, Draft; no device or firmware modifications.
+
+
+## Follow-up: explicit kernel failure chain and stronger original-M3 evidence
+
+This is a real **source-verified failure mechanism**, not merely a suspicious string.
+
+**Upstream Linux v5.4** `drivers/hid/uhid.c`:
+1. `uhid_hid_raw_request(HID_REQ_SET_REPORT)` calls `uhid_hid_set_report`, creates `UHID_SET_REPORT` with monotonically assigned request ID and waits for matching `UHID_SET_REPORT_REPLY`.
+2. `__uhid_report_queue_and_wait` has a hard `5 * HZ` wait; missing reply, UHID teardown, or an uncompleted report results in `-EIO`.
+3. `uhid_report_wake_up` ignores a reply with a different ID or wrong event type. A delayed/stale reply cannot be used to complete another request.
+4. `uhid_hid_set_report` also returns `-EIO` when the reply indicates an error; a zero-error reply returns the report byte count.
+
+**Upstream Linux v5.4** `drivers/hid/hid-sony.c`: the `SIXAXIS_CONTROLLER_BT` probe calls `sixaxis_set_operational_bt`, sending Feature SET_REPORT `F4 42 03 00 00`. On negative return it logs failed operational mode and branches to `err_stop`, before registering the Sony motion sensors / completing probe. Therefore **if the M3 stack is missing the proper matching UHID reply**, the kernel-side Bluetooth HID driver can fail to bind, even if controller authentication / L2CAP / Java policy were changed successfully.
+
+**Important M3-specific positive evidence:** owner archived `dumpsys input` in the known **USB** test shows a separate **`Sony PLAYSTATION(R)3 Controller Motion Sensors`** device, plus main gamepad. Linux 5.4's `hid-sony.c` uses the distinctive suffix ` Motion Sensors` in `sony_register_sensors`, invoked in its DS3 USB path. The very close string/behavior match makes the Sony driver **strongly indicated as active on M3's USB path**, not merely theoretically available in Linux 5.4. However it is still not direct proof of `CONFIG_HID_SONY` or exact Bluetooth UHID Sony driver binding: an OEM downstream driver could exhibit the same behavior; the Bluetooth path must advertise correct bus/VID/PID and execute probe.
+
+**Call ordering caveat:** UHID HID-driver probing and Bluetooth Java connected callback can be asynchronous; do not assert that Java admission always happens before or after the kernel's SET_REPORT timeout without M3-specific event evidence. They are separately required gates, not a guaranteed linear timeline.
+
+References:
+- Linux v5.4 UHID: https://raw.githubusercontent.com/torvalds/linux/v5.4/drivers/hid/uhid.c
+- Linux v5.4 Sony: https://raw.githubusercontent.com/torvalds/linux/v5.4/drivers/hid/hid-sony.c
+- Older Android Fluoride `bta_hh_co.cc` (request forwarded, reply stub): https://android.googlesource.com/platform/system/bt/+/54a50f50ca583146cd2556950177678d906e1391/btif/co/bta_hh_co.cc
+
+## Offline function-address triage added
+
+`experiments/m3-hid-apk/elf32_symbols.py` now parses **ELF32 ARM PT_LOAD + SYMTAB/DYNSYM** from private native artifacts with Python stdlib. `audit_uhid_support.py` includes any retained `bta_hh_co_set_rpt_rsp`, `uhid_read_event`, `btif_hh_setreport`, `bta_hh_co_send_hid_info` and `bta_hh_co_open` function symbol VMAs and mapping to **offline file offsets**. The output is only a pointer for later disassembly, **not** a live address or a verified hook. Stripped binaries can report no match despite code being present.
+
+A local independently compiled **ELF32 ARM** synthetic test library validated the symbol and VMA→file-offset extractor; pure-Python synthetic fixture unit tests plus prior UHID marker tests: **11/11 PASS**. The private original M3 2024/2025 native `libbluetooth.so` bytes are not currently available in this execution context, so **no device-native function was claimed located or behavior verified**.
+
+## Actual implementation contract if this bug is present
+
+A legitimate M3 patch design must preserve **UHID request correlation** rather than blindly acknowledging any SET_REPORT: record the originating UHID request ID (bounded, associated with correct device/session), forward the original report to proper Bluetooth HID Host over its control channel, correlate the actual response/status to **the same ID**, deliver `UHID_SET_REPORT_REPLY` with correct status, and retire pending IDs on close/timeout. Correct negative statuses must be reported as failures, not fabricated success. Separate Bluetooth Native + Java admission and per-DS3 USB authorization still apply. No generic ACK, no global HID security weakening, no direct injection of F4 without source evidence, and no device modification approved.
