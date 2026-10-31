@@ -115,3 +115,23 @@ The BlueZ Sixaxis maintainers discuss why simply weakening `ClassicBondedOnly` g
 6. Any runtime diagnostic/connection attempt still needs explicit Owner approval. No device operations were performed.
 
 **Android SDK nuance:** `BluetoothDevice.setPin(byte[])` exists in the official Android API and Android 12 normally requires `BLUETOOTH_CONNECT`; exact OEM permission checks and acceptance of an empty array must be verified. Never substitute `setPin(null)` for an empty byte array. Documentation: https://developer.android.com/reference/android/bluetooth/BluetoothDevice .
+
+
+## Android HID Host second gate — community/AOSP cross-check (2026-10-31)
+
+**Primary sources:**
+- BlueZ issue https://github.com/bluez/bluez/issues/1165 (proposed **not proven shipped** per-Sixaxis authorization; discusses L2CAP `BT_IO_SEC_MEDIUM` and PIN/encryption mismatch; acknowledges spoofing risk).
+- Android HID Host `okToConnect()` reference https://android.googlesource.com/platform/packages/apps/Bluetooth/+/refs/heads/master/src/com/android/bluetooth/hid/HidHostService.java (rejects non-bonded devices).
+- Historical AOSP alternative https://android.googlesource.com/platform/packages/apps/Bluetooth/+/bc8794046cb965d99d0623c75d5e0e783a56a6ca/src/com/android/bluetooth/hid/HidHostService.java (different bond-state condition).
+- Current modern Android modules Bluetooth source has further changes; do **not** assume exact applicability to M3 2024 vendor Android 12.
+
+**Consequence:** A privileged receiver fixing `setPin(null)` is **not sufficient proof of success**. M3 potentially enforces *two independent admission gates*: native L2CAP/BTM security before HID control/interrupt establishment, and Java `HidHostService.okToConnect` enforcing bonded state. Exact M3 implementation of the latter must be verified before suggesting a patch (the referenced upstream source is not M3 vendor code). A missing HCI reply may simply be the observable consequence of a DS3-incompatible bonding requirement; a nonbonded exception must still be scoped securely. Do not manufacture a BOND_BONDED state or forge LinkKeys.
+
+**Required offline decision tree (next milestone):**
+1. From owner-original M3 `Bluetooth.apk` bytecode, locate actual `HidHostService.okToConnect`, bond check, connection priority/policy, and any vendor-supported per-device admission path; evidence code offsets and reference SHA only, **no vendor APK commit**. Clearly mark not found / uncertain.
+2. From existing original M3 native traces, map the *known* incoming HID PSM 0x11/0x13 → security-level request → HCI Authentication Requested boundary. Don't redo broad S8 reverse engineering; use existing S8 proven call edges. Determine if a Java API can influence this security request **before** the native gate (not after).
+3. Compare possible (a) valid legacy PIN bonding, (b) nonbonded USB-authorized HID, (c) unsupported/no safe integration. Exactly identify which gates each would satisfy. `BluetoothDevice.setPin()` cannot be claimed to override L2CAP security level.
+4. If both gates lack supported per-device integration, classify standalone-helper-only as **NO_GO**, prepare a narrowly scoped native+HID policy design for Owner review *without implementing risky injection*. Revisit only after explicit separate authorization and recovery readiness; C4C-3 NO_GO persists.
+5. Explicitly disallow Android-wide unbonded HID acceptance or BlueZ `ClassicBondedOnly=false` analogue. Address-spoofing, fake keyboard injection, and audit requirements are mandatory.
+
+**First implementation milestone clarification:** M1 is now offline **two-gate feasibility proof**, not APK scaffolding. Runtime DS3 variant capture remains optional until the selected architecture actually relies on supplying a PIN. Avoid a fresh pairing attempt merely to test the old null-PIN hypothesis.
