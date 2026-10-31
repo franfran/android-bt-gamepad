@@ -33,3 +33,23 @@ The owner-supplied 2025 International extraction previously verified `TvSettings
 These are archive-derived facts, **not** authorization to install modified APKs, impersonate system UID, replace files on verified partitions, bypass authentication, or inject into the live Bluetooth process. S7-C4C-3 NO_GO remains, and PR #50 is draft.
 
 References: `docs/S7-C4C-HANDOVER.md`, `docs/SAFETY.md`, `docs/M3-DS3-OEM-PACKAGE-ROLLBACK-GATE.md`, PR #49.
+
+## Direct certificate extraction from owner-uploaded original Bluetooth APK
+
+Unlike the truncated dumpsys signature object, the original uploaded `M3-Bluetooth.apk` contains `META-INF/CERT.RSA` (1,666 bytes). Read-only command:
+
+```sh
+unzip -p M3-Bluetooth.apk META-INF/CERT.RSA \
+ | openssl pkcs7 -inform DER -print_certs \
+ | openssl x509 -noout -subject -issuer -fingerprint -sha256 -dates
+```
+
+Result:
+
+- X.509 subject and issuer: `C=TW, ST=TW, L=New Taipei, O=Micro-Star, OU=Research Center, CN=rc, emailAddress=rc@msi.com`.
+- Certificate SHA-256 fingerprint: `16:AF:60:CF:2F:39:93:16:E9:74:D3:C8:10:78:CD:3A:FE:D3:C2:48:59:22:C8:9E:4F:7A:A6:43:50:E0:D7:49`.
+- Validity: 2013-10-24 to 2041-03-11 (certificate metadata, **not** APK production date).
+
+**Proven:** embedded APK v1/JAR signature certificate. **Not proven:** whether signing scheme v2/v3 signers match (requires independent `apksigner verify --print-certs`), whether TV Settings or framework files share this certificate, who holds its private key, or whether it is the actual OEM signing authority. `Micro-Star` in certificate subject must not be conflated with the physical TV box OEM `Oranth` or interpreted as a vendor relationship without evidence. Certificate metadata can be self-assigned.
+
+This is useful for an eventual **offline certificate comparison** with the owner-original `TvSettings.apk`. It does **not** enable creation of a compatible signed replacement, nor imply APK patch installation is approved.
