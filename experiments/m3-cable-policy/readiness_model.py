@@ -13,6 +13,7 @@ class Readiness:
     native_connected: bool = False
     java_admitted: bool = False
     input_device_ready: bool = False
+    wireless_input_seen: bool = False
     closed: bool = False
 
     def candidate(self, psm: int) -> bool:
@@ -42,8 +43,18 @@ class Readiness:
         self.input_device_ready = True
         return True
 
+    def wireless_report_observed(self, *, valid: bool, via_builtin_bt: bool) -> bool:
+        # Host-only simulator. 'valid' and 'via_builtin_bt' MUST come from
+        # independently validated device telemetry, not a policy caller's word.
+        if self.closed or not self.input_device_ready or not valid or not via_builtin_bt:
+            return False
+        self.wireless_input_seen = True
+        return True
+
     def operational(self) -> bool:
-        return not self.closed and self.input_device_ready
+        # A UHID device can exist without DS3 Bluetooth operational-mode
+        # initialization or usable gamepad input.
+        return not self.closed and self.input_device_ready and self.wireless_input_seen
 
     def reset(self) -> None:
         self.candidate_psms.clear()
@@ -51,6 +62,7 @@ class Readiness:
         self.native_connected = False
         self.java_admitted = False
         self.input_device_ready = False
+        self.wireless_input_seen = False
         self.closed = False
 
     def disconnect(self) -> None:
