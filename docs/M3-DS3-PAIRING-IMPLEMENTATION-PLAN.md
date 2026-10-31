@@ -1,6 +1,6 @@
 # M3 DS3 Legacy PIN — Implementation Architecture and Validation Gates
 
-**Status:** planning-only Draft PR. **Target:** iMETBOX M3 International, Android 12 API 31, Allwinner H618, built-in Bluetooth. **No device modifications authorized.**
+**Status:** planning-only Draft PR; upstream BlueZ research makes nonbonded USB-enrolled HID the first architecture question, before any PIN helper. **Target:** iMETBOX M3 International, Android 12 API 31, Allwinner H618, built-in Bluetooth. **No device modifications authorized.**
 
 ## Source of truth and Git topology warning
 
@@ -98,3 +98,20 @@ References: Issue #6; Draft #48; merged-into-research-branch #49; earlier S8 #47
 - `crux161/ds3activate` calls `replyPINCode:0 PINCode:&pin` in its macOS pairing delegate. A zero-length reply is a platform-specific example; it does **not** establish M3 Android BluetoothDevice.setPin supports length zero nor guarantee successful DS3 authentication. Source: https://github.com/crux161/ds3activate/blob/main/ds3activate.c
 - Community Linux guides report BlueZ `ClassicBondedOnly=false` workarounds after CVE-2023-45866 changes. Such a **global security relaxation is prohibited on M3**. Sources: https://wiki.archlinux.org/title/Gamepad and https://github.com/bluez/bluez/issues/688
 - Revised M1 gate: **first select and prove the DS3-specific authentication approach from mature implementations; no hardcoded six-byte PIN proposal**. The old host-address-as-PIN assumption must not be implemented.
+
+
+## Community upstream design changes priority — BlueZ issue #1165 (2025)
+
+**Source:** https://github.com/bluez/bluez/issues/1165
+
+The BlueZ Sixaxis maintainers discuss why simply weakening `ClassicBondedOnly` globally is unsafe (CVE-2023-45866), and propose **USB-enrolled-controller-specific HID admission** while preserving the default policy for all other devices. They report `BT_IO_SEC_MEDIUM` forces encryption/bonding and may trigger a PIN the DS3 does not expect. This is an upstream discussion, **not** an implemented Android patch or proof of the exact M3 native path.
+
+**Design implications:**
+1. Treat M3's missing PIN reply as an observed symptom, not yet proof that supplying *any* PIN will solve DS3 Bluetooth HID. An empty/zero-length PIN in macOS `ds3activate` is a macOS pairing delegate call; it does not establish an M3 HCI or Java solution.
+2. Move **DS3-specific USB-enrollment-gated HID authorization, without normal PIN bonding**, ahead of the privileged PIN helper in the alternatives study. Determine whether M3's Fluoride/Android stack has an existing supported per-device policy/hook at a suitable layer; don't assume BlueZ APIs apply to the Allwinner HAL.
+3. Maintain the no-global-security-relaxation rule: no `ClassicBondedOnly=false` equivalent globally, no bypass for unknown MAC/name/CoD, no unauthorized keyboard/HID admission. A previously observed controller MAC alone is spoofable; account for impersonation and HID report restrictions.
+4. Offline M1 now includes a **protocol decision matrix**: (A) normal PIN bonding, (B) zero-length PIN response, (C) USB-enrollment-authorized nonbonded HID, with direct source evidence and Android API availability. No path is assumed proven on M3.
+5. If M3 security/authentication requires a native per-connection exception but has no supported integration, the existing C4C-3 live injection NO_GO **still wins**. Do not represent a Bluetooth PIN receiver as equivalent to disabling the native security request.
+6. Any runtime diagnostic/connection attempt still needs explicit Owner approval. No device operations were performed.
+
+**Android SDK nuance:** `BluetoothDevice.setPin(byte[])` exists in the official Android API and Android 12 normally requires `BLUETOOTH_CONNECT`; exact OEM permission checks and acceptance of an empty array must be verified. Never substitute `setPin(null)` for an empty byte array. Documentation: https://developer.android.com/reference/android/bluetooth/BluetoothDevice .
