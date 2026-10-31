@@ -72,3 +72,19 @@ Owner's exact-SHA `Bluetooth.apk` `HidHostService.onConnectStateChanged([B,I)V`,
 **Correction to earlier notes:** At `HidHostService$1.handleMessage` code unit `0x01d0`, reference `access$600` (method `0x5f92`) resolves through its exact M3 accessor at `code_off=0x26e68c` to `HidHostService.virtualUnPlugNative([B)Z` (method `0x5fc9`), **not** `disconnectHidNative`. The state rejection therefore actively requests native virtual unplug, and ordinary disconnect semantics must not be assumed. `access$700` maps to `convertHalState(I)I`, method `0x5fa1`.
 
 **Impact:** A Java-only change removing the bond check might prevent virtual unplug but cannot override the earlier Classic L2CAP authentication decision. A native-only patch that allows transport remains subject to Java virtual unplug. The original two-gate decision stands with a more precise failure behavior. No device changes.
+
+## 2026-10-31 additional exact-HAL mapping and virtual-cable risk
+
+**Direct original APK DEX verification** using SHA-256 `d12506341ffa2e733603a43bb9776b590d1fc3eb5c4655b13699cec4b58d7e0f`:
+- `HidHostService.convertHalState(I)I` at `0x26ec38` has a packed switch mapping native HAL values `0→Android CONNECTED(2), 1→CONNECTING(1), 2→DISCONNECTED(0), 3→DISCONNECTING(3)`. This is vendor DEX, **not a guess from numeric 0 meaning disconnected**.
+- `HidHostService.onConnectStateChanged([B,I)V` at `0x26f254` sets Handler message `what=3`; `HidHostService$1.handleMessage` case 3 invokes `okToConnect` on initial connected transition and on rejection invokes `access$600` → **`virtualUnPlugNative([B)Z`**.
+- A pinned, read-only regression verifier was added at `experiments/m3-hid-apk/verify_m3_hid_gate.py`, requiring owner-original APK path and refusing any SHA mismatch; it never writes the binary or calls Android.
+
+**Significant newly researched safety implication:** Bluetooth HID **Virtual Cable Unplug** is not equivalent to an ordinary disconnection. HID profile specifies virtual cable/bonding association destruction on actual VCU receipt. Bluetooth stack examples (Zephyr, Espressif) describe loss of virtual cable association. Older AOSP Fluoride `btif_hh_virtual_unplug` sends `BTA_HH_CTRL_VIRTUAL_CABLE_UNPLUG` when a *connected* device advertises `HID_VIRTUAL_CABLE`; other states may be handled differently. Sources:
+- https://docs.zephyrproject.org/latest/doxygen/html/structbt__hid__device__cb.html
+- https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/bluetooth/esp_hidd.html
+- https://android.googlesource.com/platform/system/bt/+/d2e250824fca5c42b87b3b6f5fa19646ffa2d321/btif/src/btif_hh.c
+
+**Do not overstate:** M3's actual `virtualUnPlugNative` implementation and DS3 virtual-cable attribute/response have **not** been shown to send/accept VCU, and historical failed auth attempts were not observed reaching Java connected event. There is no proof the DS3's USB-programmed master address was erased. Nonetheless a future native workaround that allows connection while leaving the Java bond gate unchanged **might trigger a virtual-cable destructive operation** before wireless acceptance. This is now a specific **test-order/deployment safety constraint**. Require a validated owner re-enrollment/recovery path (not repeated gameplay testing) and design both gates before permitting any live native fix attempt.
+
+**Priority:** (1) understand native auth failure 0x22 and supported per-device ingress; (2) prevent unintended VCU on the allowed, legitimately USB-enrolled DS3 if pursuing nonbonded cable admission; (3) observe configured HID and Android input states. Do not blanket-disable VCU for other devices, fabricate bond records, modify stock APK or live inject under the existing NO_GO.
