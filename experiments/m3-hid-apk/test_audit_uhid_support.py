@@ -2,6 +2,7 @@ import gzip
 import struct
 import unittest
 from audit_uhid_support import native_summary, kernel_config_summary
+from test_elf32_symbols import fixture
 
 
 def elf32(payload=b""):
@@ -31,6 +32,15 @@ class AuditTests(unittest.TestCase):
     def test_sha_mismatch_rejected(self):
         with self.assertRaisesRegex(ValueError, "SHA-256"):
             native_summary(elf32(), expected_sha256="0"*64)
+
+    def test_thumb_symbol_json_uses_actual_instruction_offset(self):
+        report = native_summary(fixture(thumb=True))
+        symbols = report["candidate_function_symbols"]
+        self.assertEqual(len(symbols), 1)
+        self.assertEqual(symbols[0]["symbol_value"], "0x1201")
+        self.assertEqual(symbols[0]["instruction_vma"], "0x1200")
+        self.assertEqual(symbols[0]["file_offset"], "0x200")
+        self.assertTrue(symbols[0]["thumb"])
 
     def test_kernel_config_plain_and_unknown(self):
         r = kernel_config_summary(b"CONFIG_UHID=y\n# CONFIG_HID_SONY is not set\n")
