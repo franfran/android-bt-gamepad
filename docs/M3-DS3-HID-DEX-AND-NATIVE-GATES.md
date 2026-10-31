@@ -39,3 +39,15 @@ Inspected all DEX-declared methods of the `com.android.bluetooth.hid` classes fo
 **Still unverified:** exact incoming event identifier and complete control-flow ownership at that callback; no fresh M3 HCI run or log. A byte-level invoke reference proves the call exists in HID message handler, not that a particular DS3 event passed it. The corresponding event/callback predicate is the next narrowly scoped offline verification, without a general reverse-engineering restart.
 
 **Engineering implication:** Unless actual DS3 callback takes an alternate path, incoming nonbonded connection will hit a hard Java bond check after the earlier native authentication gate. BlueZ-style cable authorization requires both an early native path and an accepted HID Host path; a PIN receiver alone has no demonstrated ability to satisfy them.
+
+## Resolved incoming HID message dispatch (exact local owner APK)
+
+Fresh read of the owner-uploaded SHA-matched `classes.dex` (no device access) resolves the `HidHostService$1.handleMessage(Message)` **packed-switch** at code-unit `0x000e`, payload `0x0250`. The payload has **16** entries for integer `Message.what = 1..16`. **Case 3** enters at code-unit `0x0195`; its control-flow body contains the already-observed `okToConnect()` invoke at `0x01c4` (method index `0x5fb3`, followed by result check). Thus the previously missing **message dispatch predecessor is proven**, not merely an orphaned call.
+
+Trace contract: `Message.what==3` -> `handleMessage` case entry `0x0195` -> conditional code path `0x01c4` `okToConnect(peer)` -> true/false gating. Actual JNI event source which sends message code 3, and execution frequency for DS3 attempts, remain **UNVERIFIED**. This does not prove that a failed native security attempt ever reaches the Java handler. Do not infer live callback execution from this static case mapping.
+
+### Why this changes implementation prioritization
+
+A successful BlueZ-style cable-paired native connection would face an independently verified M3 Java bond gate on the case-3 path. **Both native security and Java state policy have to be accounted for**, but there is no requirement to patch Java before demonstrating safe native ingress. An APK-only helper answering zero/guessed PIN still cannot be considered a completed solution.
+
+No runtime operations, firmware modifications, untrusted-controller enrollment or service restart.
