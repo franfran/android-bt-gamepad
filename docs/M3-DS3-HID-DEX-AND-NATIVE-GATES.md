@@ -88,3 +88,17 @@ Owner's exact-SHA `Bluetooth.apk` `HidHostService.onConnectStateChanged([B,I)V`,
 **Do not overstate:** M3's actual `virtualUnPlugNative` implementation and DS3 virtual-cable attribute/response have **not** been shown to send/accept VCU, and historical failed auth attempts were not observed reaching Java connected event. There is no proof the DS3's USB-programmed master address was erased. Nonetheless a future native workaround that allows connection while leaving the Java bond gate unchanged **might trigger a virtual-cable destructive operation** before wireless acceptance. This is now a specific **test-order/deployment safety constraint**. Require a validated owner re-enrollment/recovery path (not repeated gameplay testing) and design both gates before permitting any live native fix attempt.
 
 **Priority:** (1) understand native auth failure 0x22 and supported per-device ingress; (2) prevent unintended VCU on the allowed, legitimately USB-enrolled DS3 if pursuing nonbonded cable admission; (3) observe configured HID and Android input states. Do not blanket-disable VCU for other devices, fabricate bond records, modify stock APK or live inject under the existing NO_GO.
+
+## Direct M3 Java virtual-unplug status callback: what is and is not proved
+
+Another read of the SHA-pinned exact owner `Bluetooth.apk` confirms:
+- `HidHostService.onVirtualUnplug([B,I)V` at DEX `0x26f378` posts **Handler message 12**.
+- `HidHostService$1.handleMessage` packed-switch **case 12** starts at code unit `0x007d`, resolves device and status and calls `access$1900`.
+- `access$1900` at `0x26ee30` delegates to `broadcastVirtualUnplugStatus` at `0x26f0c8`.
+- This Java callback's visible direct action is broadcasting `android.bluetooth.input.profile.action.VIRTUAL_UNPLUG_STATUS`. **No direct `removeBond` call exists in this *specific message-12 reporting branch***. This does *not* prove no other Java path or native stack can remove bonding, nor that the M3 sends the over-air VCU command.
+- The checked read-only regression verifier in `experiments/m3-hid-apk/verify_m3_hid_gate.py` now includes this event chain; owner-original APK exact-byte checks passed in isolated Python 3; no device access.
+
+Android 12-era Fluoride upstream `btif_hh_virtual_unplug` sends the actual `BTA_HH_CTRL_VIRTUAL_CABLE_UNPLUG` command **conditioned on a connected HID device with `HID_VIRTUAL_CABLE` capability**. This separates an upper-level *request* from an actual over-air destructive command. Without the original M3 `libbluetooth.so` VCU callsite or live sanctioned trace we must retain **UNKNOWN** for those native conditions. Source:
+https://android.googlesource.com/platform/system/bt/+/dc17388efd1c85b32c0ae52b2545f272fb6185d4/btif/src/btif_hh.cc
+
+**Practical consequence:** Do not present erasure of sixpair master address as established. Before any native auth workaround, account for both Java admission and VCU path, and insist on one-time enrollment restore/rollback plan.
