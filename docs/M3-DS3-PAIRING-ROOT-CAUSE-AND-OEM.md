@@ -112,3 +112,7 @@ Both endpoint URLs use **HTTP**, not HTTPS. For firmware verification, insist on
 - [Draft PR #47](https://github.com/franfran/android-bt-gamepad/pull/47) — earlier BTIF pairing policy investigation
 
 No runtime modifications were made during this documentation work.
+
+### Owner-confirmed firmware variant (2026-10-31)
+
+Owner explicitly confirms this physical iMETBOX M3 was sold as the **International version (國際版)** by the Hong Kong seller at purchase. **Use only M3 International H618 2025-03-03** as the first offline firmware-comparison candidate; do not substitute Taiwan M3, M3 Pro, Pixel raven, or Tanix firmware. Seller designation supports regional selection but still does not prove hardware revision or flash compatibility. Comparison target is the newer package's `TvSettings.apk` and specifically `BluetoothPairingRequest.onReceive` / PIN variant behavior; **no OTA install authorized**. The official firmware index is https://imetbox.net/download.html . Current browsing can verify the listing, but has not retrieved an actual OTA archive (download links dynamically provided by site; sandbox download DNS failed). Do not claim a bytecode comparison or Bluetooth fix yet.
