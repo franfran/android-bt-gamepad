@@ -21,7 +21,7 @@ command -v adb >/dev/null 2>&1 || {
 # current Git working directory when the operator uses a relative path.
 case "$output" in
   /*) ;;
-  *) printf '%s\\n' 'Private output directory must be an absolute path.' >&2; exit 2 ;;
+  *) printf '%s\n' 'Private output directory must be an absolute path.' >&2; exit 2 ;;
 esac
 
 mkdir -p "$output"
@@ -35,7 +35,7 @@ esac
 
 if command -v git >/dev/null 2>&1 && \
   [ "$(git -C "$output" rev-parse --is-inside-work-tree 2>/dev/null || true)" = true ]; then
-  printf '%s\\n' 'Refusing private firmware extraction inside a Git worktree.' >&2
+  printf '%s\n' 'Refusing private firmware extraction inside a Git worktree.' >&2
   exit 2
 fi
 
