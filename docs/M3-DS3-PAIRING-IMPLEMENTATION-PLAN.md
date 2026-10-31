@@ -26,7 +26,7 @@ Existing USB enrollment (owner authorized, local-only)
    -> disarm, no background retries
 ```
 
-**IMPORTANT:** DS3 legacy PIN may be six **raw** bytes representing the Bluetooth host adapter BD_ADDR, with controller/host byte-order expectations to be independently established from known successful pairing or documented protocol. It is not ASCII `0000`, not a text representation of a MAC, and not safely convertible through `setPin(String)`. Verify byte order, raw-byte API access, valid length (6), and an offline golden-vector test before any real request. Never commit the host/controller MAC, PIN, LinkKey, bond DB or raw HCI log.
+**IMPORTANT:** DS3 legacy PIN may be six **raw** bytes representing the Bluetooth host adapter BD_ADDR, was an initial hypothesis, **not established for DS3 PIN response**. Published BlueZ `sixaxis.c` confirms host BD_ADDR is written into controller using USB feature report 0xF5, but this is **enrollment**, not a proof the subsequent PIN equals host BD_ADDR. `ds3activate` macOS `devicePairingPINCodeRequest` explicitly replies with zero-length PIN (platform-specific and not proof Android/HCI accepts it). Some implementations avoid ordinary PIN/bonding and instead arrange USB-authorized HID trust. Determine the **actual DS3 pairing mechanism** and supported Android path before proposing bytes. Reject ASCII `0000`, MAC-as-PIN, zero-length, or any other PIN guess until supported by an independently verified applicable implementation. Never commit the host/controller MAC, PIN, LinkKey, bond DB or raw HCI log.
 
 ### Options and recommendation
 
@@ -45,7 +45,7 @@ Existing USB enrollment (owner authorized, local-only)
 1. Enrollment allowed only while owner explicitly arms a single controller, using existing physical USB enrollment record; do **not** infer trust from DS3 display name, CoD, or MAC prefix alone.
 2. Locally verify USB VID:PID `054c:0268` **and** independently associate the physically attached controller's Bluetooth device address and programmed master BD_ADDR; USB VID:PID identifies a product class, not an individual trusted controller. If pairing attempt cannot be bound to precisely that enrolled controller, fail closed.
 3. Query current built-in adapter BD_ADDR through an explicitly validated privileged platform mechanism; compare with the already enrolled master, refuse changed/unknown address. Never silently rewrite controller master or fabricate LinkKeys.
-4. PIN source should be the validated host BD_ADDR as exact six raw bytes only after evidence confirms this DS3 handshake's byte order. Reject zero length, ASCII MAC, unverified mapping, or wrong pairing variant.
+4. PIN handling remains **unresolved**; do not conflate `0xF5` host master BD_ADDR enrollment with HCI PIN reply. Compare BlueZ Sixaxis USB authorization/HID setup and macOS zero-length PIN callback. Classify the M3 path as `PIN_REQUIRES_VERIFIED_IMPLEMENTATION`, not `READY_FOR_PIN`, until a proven Android-compatible mechanism exists. Reject speculative PIN values or format.
 5. One pending request, one known DS3, bounded expiry, explicit one-shot disarm, no general-purpose pairing receiver for untrusted devices. Leave unrelated Bluetooth devices to OEM behavior.
 6. Store allowlist locally with minimum permissions and lifecycle; redact addresses in log/CI/PR artifacts; document deliberate revocation/clear flow.
 
@@ -64,7 +64,7 @@ First review the existing sanitized historical log for explicit `PAIRING_VARIANT
 
 Deliver:
 - Tiny Android 12 module interface/spec for PIN decision: `{armed, controllerMatch, hostMatch, variant, min16Digits, deadline, permissions, deliveryExclusive} -> REJECT | READY_FOR_PIN`. A `READY` outcome is **not** automatic service execution.
-- Pure offline tests: raw six-byte PIN golden vector and byte order, changed adapter/master, wrong controller, ambiguous identity, variant 7, stale/duplicate event, failed permission, no deterministic receiver routing, timeouts, unknown PIN source; all fail closed.
+- Pure offline tests: controller/host address byte-order for **USB enrollment only**; fail-closed unknown/empty/MAC/PIN attempts; changed adapter/master, wrong controller, ambiguous identity, variant 7, stale/duplicate event, failed permission, no deterministic receiver routing, timeouts, unknown PIN source; all fail closed.
 - Checked manifest sketch and permission/access matrix **without** installable privileged or boot-persistent package in this milestone.
 - Sanitized device-side *future* observability: pairing variant, helper decision, API return, HCI reply, bond state, HID InputDevice and RetroArch only after successive approvals. No repeated USB functionality test.
 
@@ -72,7 +72,7 @@ Deliver:
 
 **M1 GO (build only)** when host-side validation contract, provenance, static permission/receiver analysis and reversible design are reviewed, and no APK is installed. **M1 NO_GO** for guessed PIN bytes/order, unverified API, receiver race, broad pairing policy, or any live service effect.
 
-**M2 GO (separate Owner approval)** only after runtime variant is confirmed, binary PIN and per-controller USB enrollment are validated, deterministic privileged ownership is demonstrated, package signature/privapp grant and system-integrity handling are viable, and Wi-Fi/USB ADB recovery has been **independently verified**. Explicit new Owner approval required for installing APK, privileged placement, Settings disablement/replacement, Bluetooth restart, or one-shot pairing.
+**M2 GO (separate Owner approval)** only after runtime variant is confirmed, the DS3 authentication method (not simply its USB host-address setup) and per-controller USB enrollment are validated, deterministic privileged ownership is demonstrated, package signature/privapp grant and system-integrity handling are viable, and Wi-Fi/USB ADB recovery has been **independently verified**. Explicit new Owner approval required for installing APK, privileged placement, Settings disablement/replacement, Bluetooth restart, or one-shot pairing.
 
 **Stop triggers:** variant !=0, unknown controller/host address, unmatched enrollment, permission denial, competing handler, duplicate request, failure to safely disarm, unexpected general pairing impact, loss of ADB/recovery, HCI error beyond narrow null-PIN hypothesis.
 
@@ -91,3 +91,10 @@ Deliver:
 - This PR authorizes documentation/planning and offline tests **only**; does not authorize live modifications and must not merge without Owner approval.
 
 References: Issue #6; Draft #48; merged-into-research-branch #49; earlier S8 #47; `AGENTS.md`, `docs/SAFETY.md`.
+
+## Community source correction (2026-10-31)
+
+- BlueZ `plugins/sixaxis.c` uses USB HID feature report `0xF5` to get/set the **central/master host Bluetooth BD_ADDR** and `0xF2` to identify controller; this is established cable enrollment, not evidence for a six-byte Legacy PIN response. Source: https://kernel.googlesource.com/pub/scm/bluetooth/bluez.git/+/a93047cd044fb17d687f43bef95289ec834876b2/plugins/sixaxis.c
+- `crux161/ds3activate` calls `replyPINCode:0 PINCode:&pin` in its macOS pairing delegate. A zero-length reply is a platform-specific example; it does **not** establish M3 Android BluetoothDevice.setPin supports length zero nor guarantee successful DS3 authentication. Source: https://github.com/crux161/ds3activate/blob/main/ds3activate.c
+- Community Linux guides report BlueZ `ClassicBondedOnly=false` workarounds after CVE-2023-45866 changes. Such a **global security relaxation is prohibited on M3**. Sources: https://wiki.archlinux.org/title/Gamepad and https://github.com/bluez/bluez/issues/688
+- Revised M1 gate: **first select and prove the DS3-specific authentication approach from mature implementations; no hardcoded six-byte PIN proposal**. The old host-address-as-PIN assumption must not be implemented.
