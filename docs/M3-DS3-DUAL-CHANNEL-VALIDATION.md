@@ -31,3 +31,15 @@ An owner-authorized USB enrollment is a local policy input; matching a controlle
 ## Recommended next task
 
 Refine the **offline-only state model** to separate candidate admission from channel configuration and final HID/Android InputDevice readiness; test disconnect/reconnect and session reset. Then assess which exact native and Java callbacks could report those states without changing M3. Keep PR #50 draft and C4C-3 live NO_GO.
+
+## Later verification on October 31, 2026
+
+Re-fetched **both exact PR #50 test source files** for the dual-channel policy and readiness tracker, reproduced them in an isolated local Python 3 environment, and executed:
+
+```sh
+python3 -m unittest -v test_dual_channel_policy test_readiness_model
+```
+
+Result: **18 tests, all PASS**, no failures/errors (9 dual-channel + 9 readiness). This only validates the offline simulations. The readiness tracker accepts programmatic state transitions; it does **not** receive authenticated events from M3 nor protect against stale callbacks across actual device sessions. The next observer model must include session correlation/epoch, explicit event provenance, and disconnect/error invalidation before it could be considered useful telemetry. **Do not use `Readiness.operational()` as an authorization signal or real wireless success evidence.**
+
+Separate original-APK verification of the M3 `convertHalState` mapping and `virtualUnPlugNative` rejection chain was also performed read-only; see `docs/M3-DS3-HID-DEX-AND-NATIVE-GATES.md`.
