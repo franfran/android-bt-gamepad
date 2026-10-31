@@ -16,7 +16,9 @@ TARGETS = (
 class Symbol:
     name: str
     kind: str
-    vma: int
+    vma: int  # raw ELF st_value; Thumb FUNC may have bit 0 set
+    instruction_vma: int  # actual code address, bit 0 cleared for Thumb
+    thumb: bool
     size: int
     file_offset: int | None
     table: str
@@ -78,12 +80,17 @@ def find_symbols(data: bytes, targets=TARGETS):
             name = _name(string_table, name_idx)
             if not name or name not in targets or (info & 0xF) != 2 or section_idx == 0:
                 continue
-            foff = next((off + vma - base for base, off, leng in segments
-                         if base <= vma < base + leng), None)
+            # ARM ELF32 ABI uses bit 0 of a Thumb function's st_value
+            # as an ISA-state indicator, not as part of the file address.
+            thumb = bool(vma & 1)
+            instruction_vma = vma & ~1 if thumb else vma
+            foff = next((off + instruction_vma - base for base, off, leng in segments
+                         if base <= instruction_vma < base + leng), None)
             dedupe = (name, vma, symbol_size)
             if dedupe in seen:
                 continue
             seen.add(dedupe)
-            results.append(Symbol(name, 'FUNC', vma, symbol_size, foff,
+            results.append(Symbol(name, 'FUNC', vma, instruction_vma, thumb,
+                                  symbol_size, foff,
                                   'DYNSYM' if kind == 11 else 'SYMTAB'))
     return sorted(results, key=lambda s: (s.name, s.vma))
