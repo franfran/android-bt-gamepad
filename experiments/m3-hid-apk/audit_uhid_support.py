@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import struct
 
+from elf32_symbols import find_symbols
+
 MARKERS = {
     "legacy_no_set_report_reply": b"UHID_SET_REPORT_REPLY not supported",
     "uhid_set_report_label": b"UHID_SET_REPORT",
@@ -28,14 +30,24 @@ def native_summary(data: bytes, *, expected_sha256=None):
     if expected_sha256 is not None and digest.lower() != expected_sha256.lower():
         raise ValueError("input ELF does not match expected SHA-256")
     present = {label: marker in data for label, marker in MARKERS.items()}
+    symbols = find_symbols(data)
     return {
         "sha256": digest,
         "elf": "ELF32 ARM little-endian",
         "literal_markers": present,
+        "candidate_function_symbols": [
+            {"name": sym.name, "vma": f"0x{sym.vma:x}",
+             "size": sym.size,
+             "file_offset": None if sym.file_offset is None else f"0x{sym.file_offset:x}",
+             "table": sym.table}
+            for sym in symbols
+        ],
         "result": "INCONCLUSIVE_BINARY_MARKERS_ONLY",
         "warning": ("A marker may reside in unreachable code; absent markers may be "
                     "stripped or worded differently. Determine actual compiled "
-                    "UHID_SET_REPORT request/reply behavior by callgraph disassembly."),
+                    "UHID_SET_REPORT request/reply behavior by callgraph disassembly. "
+                    "Absent symbols or a function VMA alone do not establish "
+                    "function absence, reachable code or safety of runtime hooks."),
     }
 
 
