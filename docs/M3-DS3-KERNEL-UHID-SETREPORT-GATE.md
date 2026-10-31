@@ -78,3 +78,28 @@ A local independently compiled **ELF32 ARM** synthetic test library validated th
 ## Actual implementation contract if this bug is present
 
 A legitimate M3 patch design must preserve **UHID request correlation** rather than blindly acknowledging any SET_REPORT: record the originating UHID request ID (bounded, associated with correct device/session), forward the original report to proper Bluetooth HID Host over its control channel, correlate the actual response/status to **the same ID**, deliver `UHID_SET_REPORT_REPLY` with correct status, and retire pending IDs on close/timeout. Correct negative statuses must be reported as failures, not fabricated success. Separate Bluetooth Native + Java admission and per-DS3 USB authorization still apply. No generic ACK, no global HID security weakening, no direct injection of F4 without source evidence, and no device modification approved.
+
+## 2026-10-31 precision correction — ARM32 Thumb symbol mapping regression
+
+A fresh actual **ARM32 Thumb** synthetic shared object compiled via `clang --target=armv7a-linux-androideabi21 -mthumb -nostdlib -fuse-ld=lld -shared` exposed an important bug in the new `elf32_symbols.py`: it previously treated odd ELF `STT_FUNC.st_value` as an actual instruction address for file-offset translation. The low bit denotes **Thumb instruction-set state**; it is **not part of the instruction address**. Original code mislocated each Thumb function by exactly one byte, invalidating subsequent disassembly from the reported file offset.
+
+Concrete reproduction, based on the actual newly compiled test ELF:
+
+| Value | Before | Corrected |
+|---|---|---|
+| Function | `bta_hh_co_set_rpt_rsp` | same |
+| Raw ELF `st_value` | `0x121d` | retained as `symbol_value=0x121d` |
+| Actual instruction VMA | incorrectly `0x121d` | `0x121c` |
+| ELF file offset | incorrectly `0x21d` | `0x21c` |
+| Architecture | ELF32 ARM, Thumb | explicitly `thumb=true` |
+
+Fix in `elf32_symbols.py` computes `instruction_vma = st_value & ~1` for odd ARM function symbols and derives the load-segment file offset from `instruction_vma`, while retaining the raw `st_value` for provenance. `audit_uhid_support.py` now returns distinct `symbol_value`, `instruction_vma`, `thumb`, and `file_offset` fields. Both the ELF32 helper and top-level auditor have regression tests. **13/13 Python host-only tests PASS**; actual ARM32 Thumb test ELF also outputs the expected mapped offset. This only validates address bookkeeping on test ELF, **not actual M3 native UHID reply support**.
+
+No actual M3 native ELF bytes were available in this session; no original firmware patches, live probes, or hook addresses are claimed. Any S8 original disassembly VMAs must continue to be tied to the exact SHA-pinned M3 binary and not reused for 2025 ELF or ASLR runtimes.
+
+## AOSP version history caution
+
+Old Android Fluoride `bta_hh_co_set_rpt_rsp` code has appeared in **more than one form**: one older implementation with UHID reply and ID queue was later removed in a downstream fork, other older AOSP snapshots log unsupported replies, while newer AOSP conditionally compiles reply handling behind `ENABLE_UHID_SET_REPORT`. Hence **neither Android 12 version label nor a present symbol/string proves M3 actually returns UHID_SET_REPORT_REPLY**. Require exact build callgraph or a separately approved narrowly scoped runtime observation, and never generate an ACK merely to make the kernel probe pass.
+
+Source for old AOSP stub: https://android.googlesource.com/platform/system/bt/+/b512782fdf214367e0d1f8bb3751420e6cff1d39/btif/co/bta_hh_co.cc
+Source for new conditional branch: https://android.googlesource.com/platform/packages/modules/Bluetooth/+/0861bbd1b84dd8235878bad74fb60a4319ae9cbf/system/btif/co/bta_hh_co.cc
