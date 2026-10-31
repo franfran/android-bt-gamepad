@@ -129,3 +129,19 @@ Owner downloaded the official-listing **M3 International H618** PhoenixSuit IMG 
 **Result: byte-for-byte identical.** The 2025 International firmware **does not update this TV Settings APK** and therefore does not repair the `onPair(variant,null)` PIN branch *in the APK itself*. This does **not** prove the complete Bluetooth stack is unchanged, nor that other components cannot alter runtime pairing behavior. Firmware build provenance is provided by owner file name and extraction; cryptographic OEM authenticity beyond the site's download provenance was not independently verified.
 
 **Recommended next comparison** (offline, no flash): extract 2025 `Bluetooth.apk` and `framework.jar` if we want to check whether other components differ; don't claim entire firmware DS3 fix/no fix based solely on TvSettings byte identity.
+
+### Offline 2025 International firmware Bluetooth stack comparison — completed 2026-10-31
+
+Owner supplied `m3-2025-bluetooth-framework.zip`, with 2025 International firmware `Bluetooth.apk` and `framework.jar` extracted from `system_a.img`. Compared directly to owner-extracted installed 2024 artifacts `M3-Bluetooth.apk` and `M3-framework.jar` from `Archive(1).zip`.
+
+| Artifact | 2024 installed | 2025 International | Result |
+|---|---|---|---|
+| `Bluetooth.apk` | 8,458,801 bytes; SHA256 `d12506341ffa2e733603a43bb9776b590d1fc3eb5c4655b13699cec4b58d7e0f` | 8,458,801 bytes; **same SHA256** | **Byte-identical**: Bluetooth APK service code was not updated |
+| `framework.jar` | 35,001,576 bytes; SHA256 `90019f7ee656beaca72f87b7b1af574e56f58aea85911c7786410086ff565deb` | 35,001,828 bytes; SHA256 `2efb00d7bce5a9f5ef6d77fba25e701c7ae0fc18bdc71240e08be8e0e45c9bf4` | 252-byte increase, not byte-identical |
+| `framework.jar` internal ZIP entries | 43 entries | same 43 entries | **Only `classes4.dex` differs**; all other entries including other classes DEX are byte-identical |
+
+Parsed the old/new `classes4.dex` tables: the class set is identical (4029 class descriptors), and the code-item method signature set is identical (28614 methods with nonempty code). Only **five new strings** were observed (`android.intent.extra.TIME`, `android.intent.extra.ASSIST_INPUT_DEVICE_ID`, `persist.oranth.imtv`, `getEventTime`, `launchAssist`) and **two method references** (`KeyEvent.getEventTime()`, `SearchManager.launchAssist(Bundle)`); because the DEX string/method tables shift, a raw byte comparison of individual methods in `classes4.dex` exaggerates changes. This is **not** a source-level proof that no other code semantics changed.
+
+The `BluetoothDevice` class is **not defined in `classes4.dex`**, so the byte-identical other DEX entries retain the previously verified `BluetoothDevice.setPin(String)` / `convertPinToBytes(String)` implementation. Combined with the previously confirmed identical `TvSettings.apk`, the **2025 International firmware contains no update to these three inspected pairing components' relevant logic** (TvSettings receiver, Bluetooth APK, framework BluetoothDevice PIN methods). **Do not conclude all possible driver/native modifications or runtime behavior are unchanged:** vendor libraries, boot/vbmeta, configuration and other partitions were not compared.
+
+**Decision:** there is no observed pairing-handler fix in the 2025 International build's inspected Java components; flashing this image solely as a DS3 PIN bug fix is not justified by this evidence. Next research gate is the exact runtime pairing variant or a scoped fix design, with owner approval and rollback protections.
