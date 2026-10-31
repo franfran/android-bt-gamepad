@@ -170,3 +170,28 @@ Independently decoded code units and resolved DEX field/method indices from owne
 **Residual runtime gate:** the old logcat does not log the callback's actual `min16Digits` boolean. This DEX analysis **establishes the complete conditional variant selection within M3's actual installed Bluetooth.apk** and substantially strengthens the fault localization, but a claim that the particular on-device attempt had `min16Digits=false` still needs a direct runtime observation. Do not claim an unconditional PIN=0 event. Also, precise manufacturer-specific root cause of a non-responding DS3 remains conditional on controller pairing details and PIN trust/enrollment.
 
 **No device operations performed; C4C-3 NO_GO remains.**
+
+## 9. Owner decision record — newer firmware found; pursue scoped patch rather than update
+
+**Decision date:** 2026-10-31. **Decision status:** Research and patch-design direction selected; **no implementation or device modification authorized yet**.
+
+**Context:** After identifying the suspected vendor TvSettings Legacy PIN failure, the owner confirmed this iMETBOX M3 was sold as **International (國際版)**. We located a newer international firmware **`h618_jjx_english_20250303-1532.img` (2025-03-03)** on iMETBOX's public firmware download page, versus installed 2024-04-12 (`20240412.161509`). Owner downloaded and unpacked the 1.6 GB PhoenixSuit `IMAGEWTY` image, extracted its Android sparse `super.fex`, then `system_a` and the pertinent Java components. We inspected the newer firmware **before** considering a flash.
+
+**Comparison findings:**
+- `TvSettings.apk`: installed 2024 and 2025 international images **byte-for-byte identical** (37,088,675 bytes; same SHA-256 `70d8fdd66f6b0bd3a06f30e4d755b709f2026955fda3955bff537840b15d2225`). Thus the defective/suspected `BluetoothPairingRequest.onReceive` / `onPair(variant,null)` code is **not fixed in the newer APK**.
+- `Bluetooth.apk`: also **byte-for-byte identical** between 2024 and 2025 (8,458,801 bytes; SHA-256 `d12506341ffa2e733603a43bb9776b590d1fc3eb5c4655b13699cec4b58d7e0f`). The M3 PIN request handling code is unchanged.
+- `framework.jar`: 252 bytes different, but **only `classes4.dex` differs**; the DEX containing `BluetoothDevice.setPin(String)` is byte-identical, so the relevant `setPin(null)` early-reject behavior is unchanged.
+- The full firmware (native libraries, driver, vendor partitions) has **not** been audited for behavioral differences. Therefore the narrower statement is **“no fix to the inspected Java pairing-handler path”**, not “the newer firmware is universally identical or incapable of other Bluetooth improvements.”
+
+**Owner direction:** Do **not** flash/upgrade to 2025 International merely to fix DS3 pairing. **Proceed to investigating a narrowly scoped, reversible software patch** of the Legacy PIN response path, *after* the remaining evidence and safety gates below. This is a decision **about work priority**, not permission to install a patch, replace a privileged APK, relax Bluetooth security, or restart the service.
+
+**Latest M3 exact-bytecode findings (for implementation handoff):**
+- `BondStateMachine.pinRequestCallback(..., boolean min16Digits)` forwards the boolean via `Message.arg2` in M3 `Bluetooth.apk` (DEX `code_off=0x23a358`).
+- `PendingCommandState.processMessage` at `0x239728` checks keyboard classes `0x540`/`0x5c0`; for nonkeyboard, **`min16Digits=true` -> variant 7**, **`min16Digits=false` -> variant 0**. These are direct M3 DEX findings.
+- `TvSettings.BluetoothPairingRequest.onReceive` at `0xeb74c` calls `onPair(variant,null)`; its `onPair` PIN variant 0 branch invokes `BluetoothDevice.setPin(String)` with that null argument.
+- M3 `framework.jar` `setPin(String)` / `convertPinToBytes(String)` rejects null, returning `false` without dispatching PIN bytes.
+- Two owner logcat requests show Java PIN callback → `onPair: null`; older HCI capture saw four PIN Requests without replies. **Still unobserved** in the live test: the exact DS3 `min16Digits` / variant value and whether any separate component interfered. Do not represent conditional fault as an unconditional proven full runtime trace.
+
+**Required gates before implementation or device-side tests:** (1) finalize a scoped design and identify correct DS3 PIN/USB-enrolled host association; (2) if necessary, observe actual variant in a minimally invasive diagnostic; (3) define reversible deployment/backup and ADB-over-Wi-Fi recovery with USB fallback; (4) obtain explicit owner approval for any privileged modifications or restart. Preserve **C4C-3 NO_GO**, no uncontrolled auto-PIN, no global pairing security weakening, and no premature merge.
+
+**Decision rationale in one sentence:** *A newer OEM firmware exists, but its relevant Java pairing components remain unfixed; therefore compare-first led to a controlled, device-specific patch design rather than a firmware flash.*
