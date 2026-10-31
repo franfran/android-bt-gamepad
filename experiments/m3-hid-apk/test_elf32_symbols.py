@@ -4,7 +4,7 @@ import unittest
 from elf32_symbols import find_symbols
 
 
-def fixture(function_name='bta_hh_co_set_rpt_rsp'):
+def fixture(function_name='bta_hh_co_set_rpt_rsp', *, thumb=False):
     data = bytearray(0x400)
     data[:6] = b'\x7fELF\x01\x01'
     struct.pack_into('<H', data, 18, 40)  # ARM
@@ -18,7 +18,7 @@ def fixture(function_name='bta_hh_co_set_rpt_rsp'):
     struct.pack_into('<IIIIIIIIII', data, 0x200 + 40, 0, 3, 0, 0, 0x80, len(names), 0, 0, 1, 0)
     struct.pack_into('<IIIIIIIIII', data, 0x200 + 80, 0, 11, 0, 0, 0xA0, 32, 1, 0, 4, 16)
     # second dynsym record (offset 0xB0), FUNC, vma 0x1200 -> offset 0x200
-    struct.pack_into('<IIIBBH', data, 0xB0, 1, 0x1200, 16, 2, 0, 1)
+    struct.pack_into('<IIIBBH', data, 0xB0, 1, 0x1201 if thumb else 0x1200, 16, 2, 0, 1)
     return bytes(data)
 
 
@@ -29,6 +29,16 @@ class ELF32SymbolTests(unittest.TestCase):
         self.assertEqual(result[0].name, 'bta_hh_co_set_rpt_rsp')
         self.assertEqual(result[0].file_offset, 0x200)
         self.assertEqual(result[0].vma, 0x1200)
+        self.assertEqual(result[0].instruction_vma, 0x1200)
+        self.assertFalse(result[0].thumb)
+
+    def test_thumb_state_bit_not_part_of_file_offset(self):
+        result = find_symbols(fixture(thumb=True))
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].vma, 0x1201)  # ELF st_value denotes Thumb
+        self.assertEqual(result[0].instruction_vma, 0x1200)
+        self.assertTrue(result[0].thumb)
+        self.assertEqual(result[0].file_offset, 0x200)
 
     def test_unmatched_symbol_not_misrepresented_as_missing_function(self):
         self.assertEqual(find_symbols(fixture('not_a_target')), [])
