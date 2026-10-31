@@ -31,3 +31,11 @@ Instead of redesigning Android PIN pairing again:
 **GO:** offline read-only caller mapping and native API surface feasibility. **NO_GO:** zero/guessed PIN, standalone PIN receiver as complete fix, fake bond/link key, global security downgrade, unreviewed binary patch, process injection. Existing C4C-3 NO_GO remains in effect.
 
 Owner's objective remains one-time **already completed** USB enrollment, then DS3 PS button Bluetooth connection and full wireless RetroArch control; no wired-controller retesting.
+
+## Additional direct caller evidence (same verified APK)
+
+Inspected all DEX-declared methods of the `com.android.bluetooth.hid` classes for invoke references to method_id **24499** (`HidHostService.okToConnect(BluetoothDevice)`). One direct invoke candidate is found in `Lcom/android/bluetooth/hid/HidHostService$1;->handleMessage(Landroid/os/Message;)V`, DEX `code_off=0x26dc8c` at instruction/code-unit **452** (invoke-virtual method index 24499). At code-unit 455 the boolean result is read; at 456 an `if-nez` controls the branch. Nearby references are HID native disconnect and connection-state handling. This **substantially strengthens caller reachability** relative to simply finding an unused utility method.
+
+**Still unverified:** exact incoming event identifier and complete control-flow ownership at that callback; no fresh M3 HCI run or log. A byte-level invoke reference proves the call exists in HID message handler, not that a particular DS3 event passed it. The corresponding event/callback predicate is the next narrowly scoped offline verification, without a general reverse-engineering restart.
+
+**Engineering implication:** Unless actual DS3 callback takes an alternate path, incoming nonbonded connection will hit a hard Java bond check after the earlier native authentication gate. BlueZ-style cable authorization requires both an early native path and an accepted HID Host path; a PIN receiver alone has no demonstrated ability to satisfy them.
