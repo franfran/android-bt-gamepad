@@ -58,9 +58,17 @@ Follow-up direct disassembly of exact SHA-matched M3 DEX, within `handleMessage`
 - Code-unit `0x01b5` `if-nez v2` goes to `0x01b9` to obtain `Integer.intValue()` for previous HID state; absent map entry takes default path to `0x01bd`.
 - `0x01be` `if-nez v1` branches to `0x01d4` unless previous state is **zero**.
 - `0x01c0` `if-nez v3` branches to `0x01d4` unless incoming native state is **zero**.
-- Only when both are zero does `0x01c4` invoke `okToConnect(device)`; after result conversion `0x01c8` `if-nez v4` goes to `0x01d4` on allow, otherwise calls device-address conversion at `0x01cc` and `access$600` at `0x01d0` (native-disconnect wrapper; name inferred from AOSP comparison, check accessor body separately).
+- Only when both are zero does `0x01c4` invoke `okToConnect(device)`; after result conversion `0x01c8` `if-nez v4` goes to `0x01d4` on allow, otherwise calls device-address conversion at `0x01cc` and `access$600` at `0x01d0` (actual M3 accessor calls `virtualUnPlugNative([B)Z` (directly resolved, NOT the ordinary `disconnectHidNative`)).
 - For accepted/non-initial cases the other side calls `access$700` and `access$100` at `0x01d6/0x01da` (state broadcast path).
 
 This is **direct proof** that M3 performs a bond-state admission check on the **initial connected** HID state transition (previous 0, native state 0), not merely a generic method which may never be used. Android AOSP labels message code 3 `MESSAGE_CONNECT_STATE_CHANGED`, and its equivalent incoming-connected branch uses the same conditions; M3 bytecode supports the same semantics. This branch is downstream of actual native connection establishment: it does not solve earlier L2CAP auth. No device attempt performed.
 
 References: https://android.googlesource.com/platform/packages/apps/Bluetooth/+/087d9f6a72a7f5ade938c2cbfb23aa01198bb85f/src/com/android/bluetooth/hid/HidHostService.java ; M3 uploaded APK SHA-256 above.
+
+## Exact JNI-to-handler origin and correction (direct M3 DEX, October 31)
+
+Owner's exact-SHA `Bluetooth.apk` `HidHostService.onConnectStateChanged([B,I)V`, DEX `code_off=0x26f254`, builds a `Handler.obtainMessage(3)` message and dispatches via `Handler.sendMessage`. Its bytecode contains `const/4 v1,3` and the verified framework method refs `obtainMessage(I)` index `0x124c`, `sendMessage(Message)` index `0x125c`. This **closes the static JNI event → message case 3 → okToConnect() chain**. Native invocation of the Java callback is not confirmed by this static DEX alone, nor proof that the failed pairing reaches connected state.
+
+**Correction to earlier notes:** At `HidHostService$1.handleMessage` code unit `0x01d0`, reference `access$600` (method `0x5f92`) resolves through its exact M3 accessor at `code_off=0x26e68c` to `HidHostService.virtualUnPlugNative([B)Z` (method `0x5fc9`), **not** `disconnectHidNative`. The state rejection therefore actively requests native virtual unplug, and ordinary disconnect semantics must not be assumed. `access$700` maps to `convertHalState(I)I`, method `0x5fa1`.
+
+**Impact:** A Java-only change removing the bond check might prevent virtual unplug but cannot override the earlier Classic L2CAP authentication decision. A native-only patch that allows transport remains subject to Java virtual unplug. The original two-gate decision stands with a more precise failure behavior. No device changes.
