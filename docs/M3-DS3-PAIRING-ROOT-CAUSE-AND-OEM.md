@@ -116,3 +116,16 @@ No runtime modifications were made during this documentation work.
 ### Owner-confirmed firmware variant (2026-10-31)
 
 Owner explicitly confirms this physical iMETBOX M3 was sold as the **International version (國際版)** by the Hong Kong seller at purchase. **Use only M3 International H618 2025-03-03** as the first offline firmware-comparison candidate; do not substitute Taiwan M3, M3 Pro, Pixel raven, or Tanix firmware. Seller designation supports regional selection but still does not prove hardware revision or flash compatibility. Comparison target is the newer package's `TvSettings.apk` and specifically `BluetoothPairingRequest.onReceive` / PIN variant behavior; **no OTA install authorized**. The official firmware index is https://imetbox.net/download.html . Current browsing can verify the listing, but has not retrieved an actual OTA archive (download links dynamically provided by site; sandbox download DNS failed). Do not claim a bytecode comparison or Bluetooth fix yet.
+
+### Offline 2025 International firmware comparison — completed 2026-10-31
+
+Owner downloaded the official-listing **M3 International H618** PhoenixSuit IMG named `h618_jjx_english_20250303-1532.img`, extracted `wty:super.fex` via `sunxi-fw`, split sparse dynamic-super image into `system_a`, `product_a`, `vendor_a`, and `vendor_dlkm_a`, and extracted the newer `TvSettings.apk` from the system image. Comparison of the owner-uploaded `m3-2025-extracted.zip` and earlier owner-pulled M3 installed APK `M3-TvSettings.apk.zip`:
+
+| Artifact | Size (bytes) | SHA-256 |
+|---|---:|---|
+| Installed M3 2024 `TvSettings.apk` | 37,088,675 | `70d8fdd66f6b0bd3a06f30e4d755b709f2026955fda3955bff537840b15d2225` |
+| M3 International 2025-03-03 firmware `TvSettings.apk` | 37,088,675 | `70d8fdd66f6b0bd3a06f30e4d755b709f2026955fda3955bff537840b15d2225` |
+
+**Result: byte-for-byte identical.** The 2025 International firmware **does not update this TV Settings APK** and therefore does not repair the `onPair(variant,null)` PIN branch *in the APK itself*. This does **not** prove the complete Bluetooth stack is unchanged, nor that other components cannot alter runtime pairing behavior. Firmware build provenance is provided by owner file name and extraction; cryptographic OEM authenticity beyond the site's download provenance was not independently verified.
+
+**Recommended next comparison** (offline, no flash): extract 2025 `Bluetooth.apk` and `framework.jar` if we want to check whether other components differ; don't claim entire firmware DS3 fix/no fix based solely on TvSettings byte identity.
