@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Offline host-only C++ test. Never connects to any Android device.
+# Offline-only sanitized host tests. Distinct binaries prevent shadowed coverage.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-testbin="$(mktemp "${TMPDIR:-/tmp}/retrobox-s3-test.XXXXXX")"
-trap 'rm -f "$testbin"' EXIT
-"${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
-  -fsanitize=address,undefined -fno-omit-frame-pointer \
-  experiments/m3-source-first/test_transaction_owner.cc -o "$testbin"
-"${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
-  -fsanitize=address,undefined -fno-omit-frame-pointer \
-  experiments/m3-source-first/test_bta_w4_overwrite.cc -o "$testbin"
-"$testbin"
-"$testbin"
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/retrobox-s3-tests.XXXXXX")"
+trap 'rm -rf "$tmpdir"' EXIT
+for name in test_transaction_owner test_bta_w4_overwrite; do
+  "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "experiments/m3-source-first/${name}.cc" -o "$tmpdir/$name"
+  echo "RUN $name"
+  "$tmpdir/$name"
+done
