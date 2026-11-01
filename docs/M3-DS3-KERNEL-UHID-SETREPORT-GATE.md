@@ -252,3 +252,16 @@ This adds **compiled caller evidence**. It shows a callback dispatch path branch
 This observation significantly corroborates that the logging-only stub is not just orphaned debug text. Its *runtime activation in an actual DS3 session* remains unobserved. Other `UHID_SET_REPORT_REPLY` writers elsewhere in the ELF have not yet been exhaustively excluded. The documented kernel requirement is a matching UHID event with `type=14`; the stub `0x1a6fec` can never fulfill that requirement.
 
 For the 2024 M3 native binary, **callback-level finding: FAIL (no-op)**, **complete per-device UHID handshake: UNVERIFIED**, **live DS3 wireless: NOT TESTED**. HCI auth error 0x22 occurs prior to this HID probe path. Do not ship a patch based solely on this callsite; actual request-id correlation and Java admission still unresolved.
+
+## 2026-11-01 sixth pass: establish callback event enum 5 as BTA_HH_SET_RPT_EVT
+
+Historical Fluoride callback enum definitions are version-dependent:
+- Legacy `platform/system/bt` source `bta/include/bta_hh_api.h` defines `BTA_HH_GET_RPT_EVT=4`, `BTA_HH_SET_RPT_EVT=5`. Verified against https://android.googlesource.com/platform/system/bt/+/master-soong/bta/include/bta_hh_api.h
+- A later `platform/packages/modules/Bluetooth` version inserts `BTA_HH_EMPTY_EVT=0` and shifts the same events to `5` and `6`. See https://android.googlesource.com/platform/packages/modules/Bluetooth/+/55843315dc7788857388a00c2e9026f626f21701/system/bta/include/bta_hh_api.h . **Do not apply newer enum offsets to the M3 binary.**
+- Legacy `bta/hh/bta_hh_act.cc` handles SET handshake acknowledgements and explicitly calls `bta_hh_co_set_rpt_rsp(handle,status)` when `w4_evt == BTA_HH_SET_RPT_EVT`. Source https://android.googlesource.com/platform/system/bt/+/c110eca93d69fc336a81360fc22a1e439297f634/bta/hh/bta_hh_act.cc
+
+Actual M3 owner-original 2024 ELF dispatcher `0x15ca54` loads halfword event from `[r4+0x1c]`; `0x15ca88` compares `r0` to 5; `0x15ca94` branches to the complete logging-only stub at `0x1a6fec`. The neighboring event 4 branch goes to separate `0x1a7018` helper, matching the distinct GET report callback in older Fluoride. This is strong combined **actual-M3 instruction evidence plus matching contemporary source-semantic evidence** for identifying event 5 as SET_REPORT completion; not merely an arbitrary callback index.
+
+**Updated finding:** on the identified M3 native SET_REPORT completion path, the intended `bta_hh_co_set_rpt_rsp` callback does NOT issue kernel `UHID_SET_REPORT_REPLY`. Thus the original callback is a confirmed implementation gap and the Bluetooth DS3 `hid-sony` probe is at risk if it depends on this mechanism. However, this is **not proof** that a particular DS3 session reached the callback, and an unrelated alternate kernel reply writer is still not exhaustively excluded. It also cannot explain the previously measured *earlier* HCI authentication timeout 0x22.
+
+Before any design or patch, do an original-binary read-only search for *other* UHID type 14 writers and whether the GET-report request ID queue is reused for SET. A correct future fix needs a per-device bounded SET-request ID queue, true result/status mapping, matching-ID UHID reply, timeout/disconnect cleanup, and no fabricated OK. No live M3 patch/injection authorized.
