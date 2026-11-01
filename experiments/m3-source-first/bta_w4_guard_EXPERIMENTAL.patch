@@ -1,7 +1,7 @@
 diff --git a/system/bt/bta/hh/bta_hh_act.cc b/system/bt/bta/hh/bta_hh_act.cc
 --- a/system/bt/bta/hh/bta_hh_act.cc
 +++ b/system/bt/bta/hh/bta_hh_act.cc
-@@ -1028,6 +1028,22 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
+@@ -1028,4 +1028,23 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
      const uint8_t api_sndcmd_param =
          convert_api_sndcmd_param(p_data->api_sndcmd);
  
