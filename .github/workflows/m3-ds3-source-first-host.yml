@@ -28,3 +28,5 @@ jobs:
         run: python3 -m unittest discover -s experiments/m3-source-first -p 'test_bta_patch_fixture.py' -v
       - name: Verify patch against immutable upstream BSP blob
         run: python3 experiments/m3-source-first/test_real_pinned_bsp_patch.py
+      - name: Explicit experimental patch deployment NO_GO
+        run: python3 experiments/m3-source-first/check_experimental_patch_no_go.py
