@@ -277,3 +277,26 @@ Reverified the uploaded 2024 native ELF SHA256 and directly disassembled its rea
 A new **fail-closed exact-original-byte verifier** `experiments/m3-hid-apk/verify_m3_report_dispatch.py` now pins the full 2024 ELF SHA and exact instruction bytes at these six positions: `0x15ca88`, `0x15ca94`, `0x15cb04`, `0x15cb14`, `0x1a6ff6` and `0x1a7006`. All six instruction slices have been independently checked byte-for-byte against the user's original uploaded ELF. The verifier returns explicit `reply_writer_exhaustively_excluded=False` and `runtime_reachability_verified=False` because those are NOT proven.
 
 **Updated engineering verdict:** The **documented original SET completion callback** is confirmed broken/no-op for UHID reply; asymmetry versus GET is demonstrable in compiled M3 code. Another writer elsewhere is still not ruled out, and neither this gap nor a hypothetical remedy addresses the earlier 0x22 HCI authentication failure. This analysis is offline only; no user M3 modifications, no pair attempt, and no live patch authorization.
+
+## 2026-11-01 eighth pass: actual M3 GET_REPORT reply construction and queue ID path
+
+Read-only disassembly of the owner-uploaded original 2024 SHA-pinned ELF recovers the `GET_REPORT` helper starting at `0x1a7018` and confirms the actual native reply path, with more detail than prior event-dispatch evidence:
+
+| Native Thumb VMA | Instruction/meaning |
+|---|---|
+| `0x1a7066` | Lookup per-device state |
+| `0x1a7070` | Load pointer at per-device +0x28, branch if empty |
+| `0x1a707a–0x1a7084` | Read and decrement byte queue-count field at +0x2c |
+| `0x1a7088` | Call queue helper `0x2b430c` (element retrieval, semantic details still require verification) |
+| `0x1a709a` | `movs r0,#0xa` = **UHID_GET_REPORT_REPLY type 10** |
+| `0x1a709c` | `str r0,[sp,#8]` sets outgoing event type |
+| `0x1a709e–0x1a70a0` | Loads a queue element's 32-bit request ID and stores it into event buffer |
+| `0x1a70a8` | Stores report status/size field (exact structure field interpretation needs care) |
+| `0x1a710c–0x1a7110` | Loads fd from per-device field +0x10, sets event pointer, calls `0x1a5fb0` |
+| `0x1a5fb0–0x1a5fc0` | Repeated syscall wrapper call via imported function at `0x5dfe70`, with event write size `0x111c` |
+
+In `0x1a5fb0` code, register args are r0=fd, r1=buffer, r2=`0x111c` before `blx 0x5dfe70`, consistent with `write(fd,event,sizeof(event))`. The helper handles interrupted/short writes; exact imported symbol can be correlated with relocation for definitive libc name. It is therefore no longer just a hypothetical native GET_REPORT helper: original code **constructs UHID type 10 with a stored ID and passes it through a real write-like helper**.
+
+By contrast, original event 5 dispatch `0x15ca94` invokes the `0x1a6fec` *logging-only* `bta_hh_co_set_rpt_rsp` callback. This code is missing the analogous SET_REPORT reply event construction. **Callback-level SET reply gap is CONFIRMED.** It remains a separate task to exclude other `type=14` writers and verify the exact native kernel probe path in a real DS3 session. Do not say that this causes HCI auth failure 0x22 (it occurs earlier).
+
+Potential minimal remediation must use a bounded per-device pending-SET-report queue, preserve exact UHID request ID from `UHID_SET_REPORT`, correlate actual Bluetooth status, send `UHID_SET_REPORT_REPLY (type 14)` via original UHID fd with correct error and cleanup on disconnect/timeout. The original GET queue is a useful reference but must **not be shared** indiscriminately: GET and SET requests may be concurrent, IDs must be correlated by event kind and device. Never manufacture success status. No new system/APK patch or live hook was performed.
