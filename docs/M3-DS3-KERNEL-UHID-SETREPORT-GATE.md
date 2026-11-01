@@ -326,3 +326,22 @@ Additional static relocation proof resolves the generic write-like call to actua
 - The PLT/GOT slot correspondence supports `0x5dfe70` as the `write` trampoline. At `0x1a5fbc` caller explicitly sets `r2=0x111c` then `blx 0x5dfe70`. Error path at `0x1a5fca–0x1a5fd2` checks `errno==EINTR(4)` and retries, characteristic of the same `write` wrapper.
 
 **Original M3 GET_REPORT_REPLY writer now verified as libc write via actual relocation**, rather than only a suspected write-like call. This does not prove SET_REPORT_REPLY event 14 writer exists.
+
+## 2026-11-01 tenth pass: actual UHID_SET_REPORT ingress is distinct from GET request-ID enqueue
+
+**Direct new original-M3 evidence.** The same owner's SHA-pinned 2024 native ELF was disassembled with `llvm-objdump -d --triple=thumbv7a`; verified the PC-relative xref `0x1a6980 ldr r1,[pc,#0x1cc]` / `0x1a6982 add r1,pc` resolves to the literal `UHID_SET_REPORT: Report type = %d, report_size = %d` at **`0x8c460`**. This identifies a compiled **UHID_SET_REPORT ingress branch**, not just a comment or leftover literal.
+
+The neighboring **GET_REPORT** code demonstrates actual queueing:
+- `0x1a692a ldr.w r1,[r10,#0x28]`: existing per-device pending GET-ID queue pointer.
+- `0x1a692e ldrb.w r0,[r10,#0x2c]` → `0x1a6932 add.w r0,r0,#1` → `0x1a6936 strb.w r0,[r10,#0x2c]`: increment GET queue count.
+- `0x1a693c movs r0,#4` → `0x1a693e bl 0x2b280c`: allocate 4-byte request-ID item; `0x1a6944 ldr r0,[sp,#0x44]` → `0x1a6946 str r0,[r1]`: save UHID request ID; `0x1a6948 ldr.w r0,[r10,#0x28]` → `0x1a694c bl 0x2b4280`: enqueue element.
+
+By contrast the **SET_REPORT** branch:
+- `0x1a6964 ldrb r0,[r7]`; `0x1a6970 cmp r0,#5` governs log level; `0x1a6974–0x1a6984` logs SET report type/size.
+- `0x1a6988 ldrb.w r3,[sp,#0x49]`, compares report subtype against 2, 1, 0 at `0x1a698c`, `0x1a6990`, `0x1a6994`.
+- For subtype zero, `0x1a6998 ldrh.w r2,[sp,#0x4a]`, `0x1a699c mov r0,r10`, `0x1a699e movs r1,#3`, then dispatches to `0x1a6a24` → `0x1a6a26 bl 0x1e15c8` with report data `[sp,#0x20]`; subtypes 1 and 2 use `0x1a6a1c`/`0x1a6a12` respectively. (The exact semantics of `0x1e15c8` and subtype mappings remain to be verified.)
+- **Unlike the adjacent GET branch, the SET branch does not increment queue +0x2c, allocate a 4-byte request-ID item, read `[sp,#0x44]` or invoke the enqueue helper `0x2b4280`.** It proceeds to send report over Bluetooth without preserving the incoming UHID request ID in the observed path.
+
+Coupled with later event-5 completion → `0x1a6fec` logging-only callback, this shows **both halves of the original M3 SET_REPORT bridge deficiency**: ingress does not perform corresponding request-ID enqueue, and completion does not issue type-14 kernel response. It is more precise than an assumption based on old AOSP source alone. **Caveats:** the body of dispatch helper `0x1e15c8` and all other potential reply writers have not been exhaustively analyzed; cannot claim that every possible alternate path is absent. Even a correct future UHID SET repair does not fix the earlier measured DS3 HCI auth failure 0x22.
+
+No raw proprietary binary or full disassembly committed; no on-device operations, injection, SELinux change or patch authorized.
