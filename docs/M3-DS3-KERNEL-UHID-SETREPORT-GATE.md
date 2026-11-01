@@ -156,3 +156,26 @@ The Owner uploaded the actual installed 2024 native ELF and a gzip-compressed ke
 | Live injection/system patch | NO_GO |
 
 Next offline step: map the native literal to compiled callback xrefs and search for any matching UHID_SET_REPORT_REPLY writer, explicitly accounting for ARM Thumb PC-relative loads. Never elevate a present marker to runtime proof. No proprietary binaries or kernel configs committed to Git.
+
+## 2026-11-01 second pass: actual ARM32 ELF machine-code disassembly, evidence limit
+
+A full native disassembly was produced from the **real owner-uploaded 2024 M3** `/system/lib/libbluetooth.so` using LLVM 17, alongside `readelf` inspection. This is no longer a synthetic ELF inspection. Exact binary SHA-256 matches S8 and Build-ID is `0d29a62178e43066e018216c1f1d5b18`.
+
+- `.rodata`: file offset / ELF VMA `0x5fd30`, size `0xb9600`; `"UHID_SET_REPORT_REPLY not supported"` substring at `0x745bf`.
+- `.text`: file offset `0x119e50`, ELF VMA `0x11ae50`, size `0x4c3fd8`. **Text offsets are 0x1000 behind corresponding section VMAs**, so using a raw file offset as disassembler start VMA without conversion would be an additional addressing error.
+- The ELF is **stripped**: a direct `readelf -Ws` lookup of `bta_hh_co_set_rpt_rsp`, `uhid_read_event`, and `btif_hh_setreport` returns no function symbols. Their names appear in logging constants but **are not an ELF function-address map**.
+- System `/usr/include/linux/uhid.h` enum confirms `UHID_SET_REPORT=13`, `UHID_SET_REPORT_REPLY=14`, and `UHID_GET_REPORT_REPLY=10`. Those constant values are independently supported by UHID ABI, but finding a constant 14 somewhere in a multi-megabyte binary would **not** prove an actual reply writer.
+- An initial exact-pointer scan did **not** yield a clear, attributable code reference to the unsupported reply string. ARM Thumb PC-relative address construction and relocation/link-time folding must be accounted for. Do not misread unrelated matching words as valid xrefs or assume the absence of a literal pointer means dead code.
+
+**Verdict: original kernel availability YES; M3 native binary has the unsupported-reply log constant YES; exact native SET_REPORT_REPLY writer/callback STILL UNKNOWN.** Evidence of a concrete code path writing a `struct uhid_event` with `type=14` through the actual device fd would make this a PASS, while proven active no-reply callback would establish FAIL. For now, no binary-patch offsets or conditional live experiments are justified.
+
+### Reproducibility on private owner data
+
+```sh
+readelf -SW /private/m3-original-2024-libbluetooth.so | grep -E '\\.text|\\.rodata'
+readelf -Ws /private/m3-original-2024-libbluetooth.so | grep -E 'bta_hh_co_set_rpt_rsp|uhid_read_event|btif_hh_setreport' || true
+llvm-objdump -d --triple=thumbv7a \\
+  /private/m3-original-2024-libbluetooth.so > /private/m3-original-thumb-disassembly.txt
+```
+
+Disassembly is **not** an injection, and this artifact must remain private: don't commit original ELF or full proprietary disassembly. A decompiler with ARM32 mixed-mode awareness, actual function recovery and data-flow tracking should next correlate `UHID_SET_REPORT_REPLY` (type 14), `write` to UHID fd, and the BTA response callback. Avoid treating symbol-less source matches as compiled M3 conclusions.
