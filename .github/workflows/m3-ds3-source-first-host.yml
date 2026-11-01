@@ -40,3 +40,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_real_btif_allocation_patch.py
       - name: Compile extracted patched BTIF functions with GCC and Clang
         run: python3 experiments/m3-source-first/test_compiled_btif_patch.py
+      - name: Verify integrated 3-file BTIF allocation status propagation
+        run: python3 experiments/m3-source-first/test_integrated_btif_allocation_source.py
