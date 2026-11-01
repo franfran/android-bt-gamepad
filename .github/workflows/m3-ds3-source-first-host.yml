@@ -46,3 +46,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_compiled_s9_integration.py
       - name: Cross-compile transformed S9 fragments into ELF32 ARM
         run: python3 experiments/m3-source-first/test_s9_armv7_cross_compile.py
+      - name: Audit pinned libbluetooth Soong module dependency graph
+        run: python3 experiments/m3-source-first/test_pinned_soong_module.py
