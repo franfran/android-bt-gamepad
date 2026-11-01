@@ -199,3 +199,33 @@ The two resolved referenced C strings are EXACTLY:
 **Higher-confidence finding than string scan:** This original firmware's executable code **does reference an unsupported SET_REPORT_REPLY logging branch in the named callback context**. File-offset mapping for the relevant Thumb instructions requires subtracting `0x1000` from these ELF VMAs because of its PT_LOAD layout (e.g. `0x1a6ffa` maps to file offset `0x1a5ffa`). The literal pool also lies in executable section, so do NOT try to interpret pool data at `0x1a7010` as instructions.
 
 **Crucial remaining limits:** This code reference establishes a compiled log path, **not that every invocation of the callback reaches this branch**, and not absence of a separate native `UHID_SET_REPORT_REPLY` writer. Reachability/callers and all alternate reply writes still need dedicated control/data-flow recovery. Do not infer a working patch site from these address values, which are **offline VMAs, not actual process ASLR addresses or approved live hook points**. No device operation, library patch or injection performed.
+
+## 2026-11-01 fourth pass: recovered complete original callback stub body
+
+Recovered the original 2024 M3 ELF's **entire short ARM Thumb function** at ELF VMA `0x1a6fec` (file offset `0x1a5fec`), immediately before the literal pool and a different function at `0x1a701a`. Direct LLVM disassembly of exact original SHA-pinned bytes:
+
+```asm
+1a6fec: ldr     r0, [pc, #0x1c]    ; logging-flag pointer
+1a6fee: add     r0, pc
+1a6ff0: ldr     r0, [r0]
+1a6ff2: ldrb    r0, [r0]
+1a6ff4: cmp     r0, #0
+1a6ff6: it      eq
+1a6ff8: bxeq    lr                 ; disabled logging: immediate return
+1a6ffa: ldr     r1, [pc, #0x14]   ; "%s: Error: UHID_SET_REPORT_REPLY not supported"
+1a6ffc: mov.w   r0, #0x500
+1a7000: ldr     r2, [pc, #0x10]   ; "bta_hh_co_set_rpt_rsp"
+1a7002: add     r1, pc
+1a7004: add     r2, pc
+1a7006: b.w     0x2c07c8         ; tail branch to logging routine
+1a700a: nop                       ; padding, followed by literal pool
+```
+
+Direct original ELF bytes starting at corresponding file offset `0x1a5fec`:
+`07 48 78 44 00 68 00 78 00 28 08 bf 70 47 05 49 4f f4 a0 60 04 4a 79 44 7a 44 19 f1 df bb 00 bf`.
+
+The PC-relative pool resolves to two C strings at ELF VMAs `0x745b4` and `0xb6899`. Both fall inside proprietary ELF `.rodata`, and the strings exactly identify the unsupported operation and callback name.
+
+**Defensible improved conclusion:** The identified `bta_hh_co_set_rpt_rsp` compiled native function is a **logging-only/no-op callback**. When logging disabled, it immediately returns. When logging enabled, it tail-calls logger and does not construct a UHID event or write a reply. This is now executable-body proof, not just a string xref. A normal invocation of this callback therefore cannot complete the kernel UHID SET_REPORT_REPLY transaction. **Caveat:** the rest of stripped M3 code has not yet been exhaustively examined to rule out another callback/writer; nor has live reachability from a DS3 event been observed. Therefore label the *specific callback* FAIL and *end-to-end device behavior* still CONDITIONAL/UNVERIFIED.
+
+This is a source-level **design blocker candidate**, not evidence that it caused the historical DS3 HCI auth error `0x22`: the auth failure occurs earlier than kernel HID probe. An eventual compat fix must preserve per-request UHID ID/status correlation and cannot simply force a generic OK or change security for unrelated devices. M3 live injector remains NO_GO; no owner device actions.
