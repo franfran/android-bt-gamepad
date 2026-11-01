@@ -397,3 +397,28 @@ Review of the offline model exposed a genuine safety gap: `reset_after_verified_
 The experimental implementation **now removes reset entirely**; a device key is permanently quarantined within that manager after timeout/disconnect. Creating a *new manager* would require independently proven isolation of the earlier callback source; no such isolation has been demonstrated in live M3. Test cases now assert no unsafe reset, deadline equality quarantine, malformed IDs, and device separation. **Even one-in-flight is not itself sufficient for production**: a stale callback after an apparently successful previous request or unexpected unsolicited callback still requires independent ordering/lifetime proof; transaction ID omission cannot be fixed by a Python state machine.
 
 Files: `experiments/m3-hid-apk/set_report_transactions.py`, `test_set_report_transactions.py`. This is a host-only specification, not an Android native implementation, so it does not change S7-C4C injection NO_GO. Status-to-errno mapping, real Bluetooth completion guarantees, and exact downstream event lifetime are still unresolved. Do not turn a Python test pass into authorization to write UHID responses.
+
+## 2026-11-01 twelfth pass: original callback pending-event reset and status handling
+
+Actual owner-supplied 2024 M3 binary inspected again with `llvm-objdump -d --triple=thumbv7a --start-address=0x15ca40 --stop-address=0x15cb45`. Significant exact instructions:
+
+```asm
+15ca54: ldrh    r0, [r4, #0x1c]  ; per-device outstanding w4_evt
+15ca88: cmp     r0, #5           ; SET_REPORT completion
+15ca8a: strb.w  r1, [sp]         ; mapped native completion status
+15ca90: uxtb    r1, r1
+15ca92: mov     r0, r2          ; HID handle
+15ca94: bl      0x1a6fec       ; confirmed log-only bta_hh_co_set_rpt_rsp
+15cb18: ldrh    r0, [r4, #0x1c]
+15cb28: blx     r2              ; separate upper-level callback
+15cb2a: movs    r0, #0
+15cb2c: strh    r0, [r4, #0x1c] ; clear awaited event after callback
+```
+
+The dispatcher **does** retain an outstanding event code in the device control block and clear it after reporting a completion. This is further corroborated by historical Fluoride `bta_hh_act.cc`, which invokes `bta_hh_co_set_rpt_rsp(handle,status)`, then emits the application callback and clears `p_cb->w4_evt=0` (https://android.googlesource.com/platform/system/bt/+/c110eca93d69fc336a81360fc22a1e439297f634/bta/hh/bta_hh_act.cc). But `w4_evt` is **only the event class (5 = SET_REPORT)**, not the originating kernel UHID request ID or an epoch.
+
+**Implications:** the binary supports per-device event-type tracking, *not* proof that multiple successive SET requests cannot race, that late completion cannot arrive after `w4_evt` is reused, or that an ID-less callback can safely answer the current pending UHID request. Status `r1` is derived earlier from `[r5+0x10]` and is also passed to the upper-layer callback, but its exact status-to-UHID-error mapping has not been verified. No substitute UHID type-14 writer proven.
+
+The fail-closed Python transaction model updated in previous turn was reproduced locally in the current runtime with its eight unit-test cases: **8/8 PASS** (host-only, not M3); previous unsafe reset API remains removed. This validates model invariants only, **NOT real native order/lifetime safety**.
+
+For actual implementation review, first establish whether M3's native queue rejects concurrent SETs/overwrites `w4_evt`, whether a delayed completion can be misclassified after reuse, and how a detached/reconnected device invalidates old callbacks. Do not ship kernel replies from this model or interpret a simple `w4_evt` flag as a transaction ID. No M3 live changes or S7-C4C approval.
