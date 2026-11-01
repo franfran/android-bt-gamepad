@@ -345,3 +345,36 @@ By contrast the **SET_REPORT** branch:
 Coupled with later event-5 completion → `0x1a6fec` logging-only callback, this shows **both halves of the original M3 SET_REPORT bridge deficiency**: ingress does not perform corresponding request-ID enqueue, and completion does not issue type-14 kernel response. It is more precise than an assumption based on old AOSP source alone. **Caveats:** the body of dispatch helper `0x1e15c8` and all other potential reply writers have not been exhaustively analyzed; cannot claim that every possible alternate path is absent. Even a correct future UHID SET repair does not fix the earlier measured DS3 HCI auth failure 0x22.
 
 No raw proprietary binary or full disassembly committed; no on-device operations, injection, SELinux change or patch authorized.
+
+## 2026-11-01 eleventh pass: original M3 native SET_REPORT downstream helper decoded
+
+Rechecked the actual owner-uploaded 2024 SHA-pinned `libbluetooth.so` using LLVM Thumb disassembly of **0x1e15c8–0x1e15fc**, the direct callee at `0x1a6a26` in the SET ingress path. This is not a synthetic fixture:
+
+```asm
+1e15c8: push.w {r4,r5,r6,r7,r8,lr}
+1e15cc: mov r7,r0                  ; device/context
+1e15ce: add.w r0,r2,#0x16         ; buffer size = report length + 22
+1e15d2: mov r4,r3                  ; payload pointer
+1e15d4: mov r5,r2                  ; length
+1e15d6: mov r8,r1                  ; subtype/report type
+1e15d8: bl 0x2b280c               ; allocation
+1e15dc: mov r6,r0
+1e15de: movs r0,#0xe
+1e15e0: strh r0,[r6,#4]           ; internal BTA message/event field 0x000e
+1e15e2: add.w r0,r6,#0x16
+1e15e6: mov r1,r4
+1e15e8: mov r2,r5
+1e15ea: strh r5,[r6,#2]
+1e15ec: bl 0x4aa9b6               ; payload copy-like helper
+1e15f0: ldrb r0,[r7,#4]
+1e15f2: uxtb.w r1,r8
+1e15f6: mov r2,r6
+1e15f8: pop.w {r4,r5,r6,r7,r8,lr}
+1e15fc: b.w 0x15d4b2             ; internal Bluetooth dispatch
+```
+
+**Important numerical collision:** the internal 16-bit `0x000e` at buffer+4 is **NOT evidence of Linux `UHID_SET_REPORT_REPLY=14`**. This routine builds a Bluetooth native message and dispatches to `0x15d4b2`, rather than issuing a `write(fd, struct uhid_event,...)`. The arguments to `0x1e15c8` are device/context, mapped report subtype, length and payload pointer; the incoming kernel UHID request ID is **not supplied**. The code at `0x1a6964–0x1a6a26` likewise did not enqueue its ID. Coupled with the completed SET event-5 callback's no-op implementation, this strongly constrains where the request correlation is lost.
+
+This finding describes the **observed standard ingress → helper path** only; a separate alternate kernel reply writer elsewhere in the stripped binary is still not exhaustively excluded. Also, the internal message's `0x000e` is in a different ABI/struct and must not be misrepresented as the kernel event type 14. Any future native bridge must introduce per-device bounded SET request bookkeeping and correlate real completion status, rather than treating a successfully queued Bluetooth message as a successful UHID transaction. HCI authentication 0x22 is an earlier independent gate.
+
+Original OEM ELF not committed; no M3 activity, injection, firmware change, Bluetooth restart or PR merge.
