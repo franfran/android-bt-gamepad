@@ -378,3 +378,14 @@ Rechecked the actual owner-uploaded 2024 SHA-pinned `libbluetooth.so` using LLVM
 This finding describes the **observed standard ingress → helper path** only; a separate alternate kernel reply writer elsewhere in the stripped binary is still not exhaustively excluded. Also, the internal message's `0x000e` is in a different ABI/struct and must not be misrepresented as the kernel event type 14. Any future native bridge must introduce per-device bounded SET request bookkeeping and correlate real completion status, rather than treating a successfully queued Bluetooth message as a successful UHID transaction. HCI authentication 0x22 is an earlier independent gate.
 
 Original OEM ELF not committed; no M3 activity, injection, firmware change, Bluetooth restart or PR merge.
+
+## 2026-11-01: SET request correlation design — fail-closed implementation started
+
+Original 2024 native `0x1e15fc` tail-calls `0x15d4b2`. In the verified latter function, `0x15d4b6` allocates a fixed `0x14`-byte Bluetooth command wrapper; it assigns event/command fields `0x1708` (halfword at buffer+0) and `5` (byte at buffer+8), stores the original payload pointer at buffer+0x10, and stores report subtype byte at +9. It then tail-calls `0x16b018`. **No original UHID request ID is included in this wrapper.** This is real original-ELF machine code evidence, not a claim that the downstream `0x16b018` callback has been fully decoded.
+
+**Concurrency hazard:** the outgoing native SET completion callback (event=5) carries no UHID request ID. A naive FIFO completion matcher is unsafe if several SET_REPORTs are outstanding for a device or a late response arrives after a timeout/disconnect. Accordingly, an offline executable transaction specification has now been added:
+
+- `experiments/m3-hid-apk/set_report_transactions.py` — one in-flight SET per device, retains exact UHID request ID and native (unmapped) status, disallows duplicate/concurrent submission, quarantines timed-out or disconnected sessions, never fabricates success.
+- `experiments/m3-hid-apk/test_set_report_transactions.py` — **6 local host-only unit tests PASS**: request ID/status retention, no unsolicited reply, no parallel requests, stale timeout handling, disconnect quarantine, separate-device isolation and reset requiring external new-session verification.
+
+**Important limitations:** this is NOT a production native bridge, Android service hook or UHID writer. Even the reset API requires an external verified guarantee that all callbacks from the prior session are drained; it is not a claim that Android provides that guarantee. The original SET completion status enumeration/errno mapping, HID host probe interaction, native queue/lifetime ownership, and rollback are still unknown. Never generate `UHID_SET_REPORT_REPLY` from this model alone, and do not infer a status=0 success from merely queueing a Bluetooth message. M3 live-injection gate remains NO_GO.
