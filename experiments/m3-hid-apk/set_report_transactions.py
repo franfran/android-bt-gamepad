@@ -1,9 +1,13 @@
-"""Offline SET_REPORT transaction contract; NOT a native hook or deployment code.
+"""Offline SET_REPORT transaction contract, NOT a native hook.
 
-M3 completion callback has no request ID: permit one in-flight SET per device.
-Timeout/disconnect quarantines the device so stale callbacks cannot be
-misattributed to later requests. Completion carries raw native status only;
-status->UHID errno mapping must be separately verified, never fabricated.
+The M3 callback has neither UHID ID nor generation. One-in-flight per
+device is NECESSARY but INSUFFICIENT to prove reply attribution: this
+model assumes external native evidence that completion is strictly ordered
+and callbacks cannot be stale at any newly submitted request.
+
+Once timeout/disconnect occurs, this manager never permits reuse of that
+device key. A new manager requires independently verified isolation of the
+old callback source (e.g. confirmed old process terminated), outside here.
 """
 from dataclasses import dataclass
 
@@ -13,7 +17,7 @@ class Completion:
     request_id: int
     native_status: int
 
-@dataclass
+@dataclass(frozen=True)
 class Pending:
     request_id: int
     deadline: int
@@ -24,7 +28,13 @@ class SetReportTransactions:
         self._poisoned: set[str] = set()
 
     def submit(self, device: str, request_id: int, *, now: int, timeout: int) -> bool:
-        if not device or not (0 <= request_id <= 0xffffffff) or timeout <= 0:
+        if not device or not isinstance(request_id, int) or isinstance(request_id, bool):
+            return False
+        if not isinstance(now, int) or isinstance(now, bool):
+            return False
+        if not isinstance(timeout, int) or isinstance(timeout, bool):
+            return False
+        if not (0 <= request_id <= 0xffffffff) or timeout <= 0:
             return False
         if device in self._poisoned or device in self._pending:
             return False
@@ -32,19 +42,19 @@ class SetReportTransactions:
         return True
 
     def complete(self, device: str, *, native_status: int, now: int) -> Completion | None:
-        pending = self._pending.get(device)
-        if pending is None or device in self._poisoned:
+        p = self._pending.get(device)
+        if p is None or device in self._poisoned:
             return None
-        if now >= pending.deadline:
+        if now >= p.deadline:
             self._pending.pop(device)
             self._poisoned.add(device)
             return None
         self._pending.pop(device)
-        return Completion(device, pending.request_id, native_status)
+        return Completion(device, p.request_id, native_status)
 
     def expire(self, device: str, *, now: int) -> bool:
-        pending = self._pending.get(device)
-        if pending is None or now < pending.deadline:
+        p = self._pending.get(device)
+        if p is None or now < p.deadline:
             return False
         self._pending.pop(device)
         self._poisoned.add(device)
@@ -54,10 +64,5 @@ class SetReportTransactions:
         self._pending.pop(device, None)
         self._poisoned.add(device)
 
-    def reset_after_verified_new_session(self, device: str) -> bool:
-        # Only call after external proof all callbacks from old session drained.
-        # This class CANNOT establish that proof; no automatic reset is allowed.
-        if device in self._pending:
-            return False
-        self._poisoned.discard(device)
-        return True
+    def quarantined(self, device: str) -> bool:
+        return device in self._poisoned
