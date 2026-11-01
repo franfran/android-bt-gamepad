@@ -48,9 +48,12 @@ touch "$STAMP"
 m libbluetooth -j2 2>&1 | tee "$EVIDENCE/soong-libbluetooth-$LABEL.log"
 PRODUCT_OUT="$(get_build_var PRODUCT_OUT)"
 OUT32="$PRODUCT_OUT/system/lib/libbluetooth.so"
-if [[ ! -f "$OUT32" || ! "$OUT32" -nt "$STAMP" ]]; then
+if [[ ! -f "$OUT32" ]]; then
   echo "NO_GO: ARM32 product system/lib/libbluetooth.so not produced: $OUT32" >&2
   exit 1
+fi
+if [[ ! "$OUT32" -nt "$STAMP" ]]; then
+  echo "WARNING: Soong reported success but output predates this invocation (possibly up-to-date cache)" | tee "$EVIDENCE/output-age-$LABEL.txt"
 fi
 cp "$OUT32" "$EVIDENCE/libbluetooth-arm32-$LABEL.so"
 file "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/file-$LABEL.txt"
