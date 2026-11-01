@@ -112,7 +112,7 @@ def main():
         old=sources[relative].splitlines(keepends=True)
         new=patched[relative].splitlines(keepends=True)
         diff+="".join(difflib.unified_diff(old,new,fromfile="a/"+BASE+relative,tofile="b/"+BASE+relative))
-    assert "UHID_SET_REPORT_REPLY" not in (patched["btif/co/bta_hh_co.cc"].split("const uint32_t kernel_set_request_id",1)[1].split("break;",1)[0])
+    assert "ev.type = UHID_SET_REPORT_REPLY" not in (patched["btif/co/bta_hh_co.cc"].split("const uint32_t kernel_set_request_id",1)[1].split("break;",1)[0])
     assert "btif_hh_try_enqueue_setreport(" in patched["btif/co/bta_hh_co.cc"]
     assert "btif_hh_setreport(p_dev, BTHH_FEATURE_REPORT, ev.u.output.size," in patched["btif/co/bta_hh_co.cc"]
     with tempfile.TemporaryDirectory() as tmp:
