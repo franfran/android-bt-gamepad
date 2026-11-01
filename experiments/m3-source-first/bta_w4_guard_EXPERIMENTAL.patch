@@ -1,0 +1,27 @@
+diff --git a/system/bt/bta/hh/bta_hh_act.cc b/system/bt/bta/hh/bta_hh_act.cc
+--- a/system/bt/bta/hh/bta_hh_act.cc
++++ b/system/bt/bta/hh/bta_hh_act.cc
+@@ -1028,6 +1028,22 @@ void bta_hh_write_dev_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
+     const uint8_t api_sndcmd_param =
+         convert_api_sndcmd_param(p_data->api_sndcmd);
+ 
++    // RETROBOX EXPERIMENTAL / OFFLINE ONLY:
++    // An outstanding handshake transaction must not have its w4_evt
++    // overwritten by a later GET/SET/PROTO command. This is an admission
++    // rejection, NOT serialization or proof of callback identity.
++    const bool expects_handshake =
++        p_data->api_sndcmd.t_type == HID_TRANS_SET_PROTOCOL ||
++        p_data->api_sndcmd.t_type == HID_TRANS_GET_REPORT ||
++        p_data->api_sndcmd.t_type == HID_TRANS_SET_REPORT ||
++        p_data->api_sndcmd.t_type == HID_TRANS_GET_PROTOCOL ||
++        p_data->api_sndcmd.t_type == HID_TRANS_GET_IDLE ||
++        p_data->api_sndcmd.t_type == HID_TRANS_SET_IDLE;
++    if (expects_handshake && p_cb->w4_evt != 0) {
++      APPL_TRACE_ERROR("RetroBox offline guard: outstanding HID transaction");
++      osi_free(p_data->api_sndcmd.p_data);
++      cbdata.status = BTA_HH_ERR;
++      (*bta_hh_cb.p_cback)(event, (tBTA_HH*)&cbdata);
++      return;
++    }
++
+     if (HID_HostWriteDev(p_cb->hid_handle, p_data->api_sndcmd.t_type,
