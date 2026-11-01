@@ -436,3 +436,28 @@ Directly disassembled owner-uploaded original 2024 SHA-pinned M3 ARM32 ELF, sear
 **Crucial caveat:** there is **no local compare/test of the *previous* `[r4,#0x1c]` value** immediately before this write. But `0x27e684` does have connection/channel state checks and calls an additional helper `0x27eac4`; its result gates the setter. This does **not** establish that an overlapping second SET command can reach the store, nor that Bluetooth transaction ordering is serial. Until native queue and state-machine admission are traced, pending-event **overwrite is a plausible hazard, not a demonstrated runtime bug**.
 
 **Engineering consequences:** refuse to use `w4_evt` as a UHID transaction ID, do not claim safe FIFO order; enforce one-in-flight at the ingress boundary *before* sending native messages and require proof that legacy transport cannot emit stale callbacks against a reused session. Continue prioritizing measured HCI auth 0x22 and Java HID Host bond gate; this UHID gap is later in the path. Only offline original-ELF inspection was performed. No M3 changes, injection, security bypass, or live Bluetooth restart.
+
+## 2026-11-01: Verified upstream status gates ahead of w4_evt setter
+
+**Original ELF bytecode directly rechecked this turn**, SHA-256 `4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85`, using LLVM Thumb disassembly. The decisive path is:
+
+```asm
+15d1d4: mov     r1,r7
+15d1d6: mov     r2,r5
+15d1d8: bl      0x27e684
+15d1dc: cbz     r0,0x15d218     ; only zero status takes command-accepted path
+...
+15d218: ldrb    r3,[r6,#8]
+15d21a: subs    r0,r3,#4
+15d21c: cmp     r0,#6
+15d21e: bhs     0x15d23a
+15d220: strh    r7,[r4,#0x1c]   ; w4_evt store for command types 4..9
+```
+
+In native helper `0x27e684`, the status/connection gate is nontrivial: `0x27e6b8` checks a bounded device index (<=6); `0x27e6cc` checks an allocated/active slot; `0x27e6da` requires a connection-state byte equal to 1, and `0x27e6ee` delegates to `0x27eac4` only if these checks pass. Helper `0x27eac4` calls `0x233a88` at `0x27eaec` to check a further per-device/channel condition; one failure branch returns 4 at `0x27eb30`. At `0x27eb00` it tests a connection/security flag bit and another failure branch returns 8 at `0x27eb40`. It also inspects command codes and constructs HID protocol packet data downstream.
+
+**What is now proven:** `w4_evt` is written only on the zero-return acceptance branch from a real native HID command gate. The upstream path verifies device slot and state; earlier wording suggesting no guards anywhere was overly broad.
+
+**What is not proven:** this gate does not visibly compare `w4_evt` with a prior outstanding SET transaction. `0x233a88` and downstream command queue ordering still require analysis before deciding whether overlapping SETs are rejected, serialized, or can overwrite `w4_evt`. Return codes 4 and 8 are machine-code facts, but their exact public enum names are not confirmed here. Do not elevate the lack of local `w4_evt` check into a demonstrated overwrite race or assume return 0 means the actual Bluetooth peer acknowledged a report.
+
+The M3's earliest observed DS3 failure remains HCI authentication 0x22; the UHID SET reply gap is later in the connection path. This pass remains offline only and uses no device modifications, hooks, paired-device actions, or firmware distribution.
