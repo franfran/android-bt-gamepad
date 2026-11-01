@@ -1,0 +1,15 @@
+diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
+--- a/system/bt/btif/co/bta_hh_co.cc
++++ b/system/bt/btif/co/bta_hh_co.cc
+@@ -172,4 +172,11 @@ static int uhid_read_event(btif_hh_device_t* p_dev) {
+         APPL_TRACE_DEBUG("UHID_SET_REPORT: Report type = %d, report_size = %d"
+                           , ev.u.set_report.rtype, ev.u.set_report.size);
+ 
++        // RETROBOX OFFLINE EXPERIMENT ONLY. Preserve the original kernel
++        // transaction identifier at ingress for future ownership plumbing.
++        // This local value is NOT sent through BTA; a reply must NOT be sent
++        // until the asynchronous handshake can be correlated by generation.
++        const uint32_t uhid_request_id = ev.u.set_report.id;
++        (void)uhid_request_id;
++
+         if (ev.u.set_report.rtype == UHID_FEATURE_REPORT)

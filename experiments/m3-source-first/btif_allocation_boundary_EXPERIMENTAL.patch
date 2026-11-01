@@ -1,0 +1,26 @@
+diff --git a/system/bt/btif/src/btif_hh.cc b/system/bt/btif/src/btif_hh.cc
+--- a/system/bt/btif/src/btif_hh.cc
++++ b/system/bt/btif/src/btif_hh.cc
+@@ -630,10 +630,19 @@
+-void btif_hh_setreport(btif_hh_device_t* p_dev, bthh_report_type_t r_type,
+-                       uint16_t size, uint8_t* report) {
++// RetroBox OFFLINE RESEARCH: expose only pre-BTA allocation acceptance.
++// A true result does NOT imply successful transmission or remote handshake.
++static bool btif_hh_enqueue_setreport(btif_hh_device_t* p_dev,
++                                      bthh_report_type_t r_type,
++                                      uint16_t size, uint8_t* report) {
+   BT_HDR* p_buf = create_pbuf(size, report);
+   if (p_buf == NULL) {
+     APPL_TRACE_ERROR("%s: Error, failed to allocate RPT buffer, size = %d",
+                      __func__, size);
+-    return;
++    return false;
+   }
+   BTA_HhSetReport(p_dev->dev_handle, r_type, p_buf);
++  return true;
++}
++
++void btif_hh_setreport(btif_hh_device_t* p_dev, bthh_report_type_t r_type,
++                       uint16_t size, uint8_t* report) {
++  (void)btif_hh_enqueue_setreport(p_dev, r_type, size, report);
+ }

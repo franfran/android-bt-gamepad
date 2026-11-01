@@ -1,0 +1,60 @@
+name: M3 DS3 source-first offline host tests
+on:
+  push:
+    branches:
+      - feat/m3-ds3-source-first
+  pull_request:
+    paths:
+      - 'experiments/m3-source-first/**'
+      - '.github/workflows/m3-ds3-source-first-host.yml'
+permissions:
+  contents: read
+jobs:
+  host-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate offline Android BSP build entry points
+        run: |
+          bash -n experiments/m3-source-first/build_bsp_arm32_offline.sh
+          python3 -m py_compile experiments/m3-source-first/apply_s9_to_pinned_bsp.py experiments/m3-source-first/full_bsp_build_preflight.py experiments/m3-source-first/compare_m3_bluetooth_elf.py
+      - name: Verify compiler
+        run: c++ --version
+      - name: C++17 sanitizer host tests
+        run: bash experiments/m3-source-first/run_host_tests.sh
+      - name: Python source preflight syntax
+        run: python3 -m py_compile experiments/m3-source-first/offline_preflight.py
+      - name: Offline source-contract fixture tests
+        run: python3 -m unittest discover -s experiments/m3-source-first -p 'test_source_contract.py' -v
+      - name: Experimental BSP guard patch fixture
+        run: python3 -m unittest discover -s experiments/m3-source-first -p 'test_bta_patch_fixture.py' -v
+      - name: Verify patch against immutable upstream BSP blob
+        run: python3 experiments/m3-source-first/test_real_pinned_bsp_patch.py
+      - name: Explicit experimental patch deployment NO_GO
+        run: python3 experiments/m3-source-first/check_experimental_patch_no_go.py
+      - name: Verify request ID ingress patch against immutable BSP
+        run: python3 experiments/m3-source-first/test_real_ingress_id_patch.py
+      - name: Verify pinned multi-producer ingress and allocation boundary
+        run: python3 experiments/m3-source-first/test_pinned_producer_paths.py
+      - name: Verify kernel SET origin boundary against immutable BSP
+        run: python3 experiments/m3-source-first/test_real_origin_boundary_patch.py
+      - name: Verify real BTIF allocation-boundary patch
+        run: python3 experiments/m3-source-first/test_real_btif_allocation_patch.py
+      - name: Compile extracted patched BTIF functions with GCC and Clang
+        run: python3 experiments/m3-source-first/test_compiled_btif_patch.py
+      - name: Verify integrated 3-file BTIF allocation status propagation
+        run: python3 experiments/m3-source-first/test_integrated_btif_allocation_source.py
+      - name: Compile and execute S9 transformed ingress and BTIF helper
+        run: python3 experiments/m3-source-first/test_compiled_s9_integration.py
+      - name: Cross-compile transformed S9 fragments into ELF32 ARM
+        run: python3 experiments/m3-source-first/test_s9_armv7_cross_compile.py
+      - name: Audit pinned libbluetooth Soong module dependency graph
+        run: python3 experiments/m3-source-first/test_pinned_soong_module.py
+      - name: Verify actual libbtif source membership in libbluetooth
+        run: python3 experiments/m3-source-first/test_pinned_btif_build_membership.py
+      - name: Reject incomplete Android BSP checkout (safe preflight fixture)
+        run: python3 experiments/m3-source-first/test_full_bsp_build_preflight.py
+      - name: Verify pinned Apollo P1 candidate lunch target
+        run: python3 experiments/m3-source-first/test_pinned_apollo_p1_target.py
