@@ -265,3 +265,15 @@ Actual M3 owner-original 2024 ELF dispatcher `0x15ca54` loads halfword event fro
 **Updated finding:** on the identified M3 native SET_REPORT completion path, the intended `bta_hh_co_set_rpt_rsp` callback does NOT issue kernel `UHID_SET_REPORT_REPLY`. Thus the original callback is a confirmed implementation gap and the Bluetooth DS3 `hid-sony` probe is at risk if it depends on this mechanism. However, this is **not proof** that a particular DS3 session reached the callback, and an unrelated alternate kernel reply writer is still not exhaustively excluded. It also cannot explain the previously measured *earlier* HCI authentication timeout 0x22.
 
 Before any design or patch, do an original-binary read-only search for *other* UHID type 14 writers and whether the GET-report request ID queue is reused for SET. A correct future fix needs a per-device bounded SET-request ID queue, true result/status mapping, matching-ID UHID reply, timeout/disconnect cleanup, and no fabricated OK. No live M3 patch/injection authorized.
+
+## 2026-11-01 seventh pass: original M3 GET-vs-SET asymmetric dispatcher
+
+Reverified the uploaded 2024 native ELF SHA256 and directly disassembled its real callback dispatcher. Native event handler at `0x15ca08` reads the event halfword `[r4,#0x1c]`, uses a Thumb `tbb` dispatch, and has two separate report branches:
+
+- **SET_REPORT event 5:** `0x15ca88 cmp r0,#5` then `0x15ca94 bl 0x1a6fec`, pointing to the SHA-verified **log-only SET_REPORT response callback**. It subsequently continues towards native upper-layer callback/event cleanup, **not UHID_SET_REPORT_REPLY**.
+- **GET_REPORT event 4:** `0x15cb04 cmp r0,#4` then `0x15cb14 bl 0x1a7018`, an entirely different helper. Its full internal semantics must be audited separately; merely reaching it doesn't prove its queue/reply success.
+- Nearby upper-layer indirect callbacks at `0x15cb28` and housekeeping at `0x15cb2c` are **not proof** of a successful kernel UHID write. A callback dispatch and UHID transaction completion are different responsibilities.
+
+A new **fail-closed exact-original-byte verifier** `experiments/m3-hid-apk/verify_m3_report_dispatch.py` now pins the full 2024 ELF SHA and exact instruction bytes at these six positions: `0x15ca88`, `0x15ca94`, `0x15cb04`, `0x15cb14`, `0x1a6ff6` and `0x1a7006`. All six instruction slices have been independently checked byte-for-byte against the user's original uploaded ELF. The verifier returns explicit `reply_writer_exhaustively_excluded=False` and `runtime_reachability_verified=False` because those are NOT proven.
+
+**Updated engineering verdict:** The **documented original SET completion callback** is confirmed broken/no-op for UHID reply; asymmetry versus GET is demonstrable in compiled M3 code. Another writer elsewhere is still not ruled out, and neither this gap nor a hypothetical remedy addresses the earlier 0x22 HCI authentication failure. This analysis is offline only; no user M3 modifications, no pair attempt, and no live patch authorization.
