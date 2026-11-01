@@ -1,0 +1,16 @@
+diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
+--- a/system/bt/btif/co/bta_hh_co.cc
++++ b/system/bt/btif/co/bta_hh_co.cc
+@@ -172,6 +172,15 @@ static int uhid_read_event(btif_hh_device_t* p_dev) {
+         APPL_TRACE_DEBUG("UHID_SET_REPORT: Report type = %d, report_size = %d"
+                           , ev.u.set_report.rtype, ev.u.set_report.size);
+ 
++        // RETROBOX EXPERIMENTAL: a source-local observation of kernel origin.
++        // This does NOT send a response or create a safe correlation token.
++        // Keep UHID SET separate from UHID_OUTPUT Feature and Java HAL calls.
++        const uint32_t kernel_set_request_id = ev.u.set_report.id;
++        const uint8_t kernel_set_report_type = ev.u.set_report.rtype;
++        (void)kernel_set_request_id;
++        (void)kernel_set_report_type;
++
+         if (ev.u.set_report.rtype == UHID_FEATURE_REPORT)
