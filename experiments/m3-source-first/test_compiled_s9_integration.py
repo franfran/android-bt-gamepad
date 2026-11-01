@@ -4,6 +4,7 @@
 Host source extraction; NOT an Android/Soong/ARM32 build or a live kernel reply.
 """
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -65,6 +66,8 @@ int main() {
 """
     with tempfile.TemporaryDirectory() as t:
         root=Path(t);(root/"test.cc").write_text(harness)
+        if os.environ.get("RETROBOX_S9_EMIT_SOURCE"):
+            Path(os.environ["RETROBOX_S9_EMIT_SOURCE"]).write_text(harness)
         for compiler in ("c++","clang++"):
             exe=root/("test-"+compiler)
             subprocess.run([compiler,"-std=c++17","-Wall","-Wextra","-Werror","-pedantic",
