@@ -42,3 +42,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_compiled_btif_patch.py
       - name: Verify integrated 3-file BTIF allocation status propagation
         run: python3 experiments/m3-source-first/test_integrated_btif_allocation_source.py
+      - name: Compile and execute S9 transformed ingress and BTIF helper
+        run: python3 experiments/m3-source-first/test_compiled_s9_integration.py
