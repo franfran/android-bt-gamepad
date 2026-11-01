@@ -44,6 +44,7 @@ void BTA_HhSetReport(int,int,BT_HDR*) { ++sends; }
 """ + methods + r"""
 bool kernel_ingress(btif_hh_device_t* p_dev, Event ev) {
 """ + ingress + r"""
+(void)kernel_set_request_id; // host logging macro has no side effects
 return queued_locally;
 }
 int main() {
@@ -55,7 +56,7 @@ int main() {
   if(!kernel_ingress(&dev,e) || sends!=1) return 2;
   e.u.set_report.rtype=UHID_INPUT_REPORT;
   if(!kernel_ingress(&dev,e) || sends!=2) return 3;
-  e.set_report.rtype=255;
+  e.u.set_report.rtype=255;
   if(kernel_ingress(&dev,e) || sends!=2) return 4;
   btif_hh_setreport(&dev,BTHH_FEATURE_REPORT,2,e.u.set_report.data);
   return sends==3 ? 0 : 5;
