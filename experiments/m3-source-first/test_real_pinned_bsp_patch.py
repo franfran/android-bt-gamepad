@@ -20,7 +20,7 @@ def main():
     with urllib.request.urlopen(url, timeout=25) as response:
         source = response.read()
     # Git object identity is not the ordinary SHA1 of file contents.
-    git_blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\\0" + source).hexdigest()
+    git_blob = hashlib.sha1(b"blob " + str(len(source)).encode() + bytes([0]) + source).hexdigest()
     if git_blob != BLOB:
         raise RuntimeError(f"Upstream blob mismatch: {git_blob}")
     with tempfile.TemporaryDirectory() as tmp:
