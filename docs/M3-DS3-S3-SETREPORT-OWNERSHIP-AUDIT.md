@@ -40,3 +40,14 @@ Base commit: `250eabfc529518b7f26432663ed0a867ab2f625d`, `system/bt` tree `d6f07
 **Independent gates remain BLOCKED:** HCI authentication timeout 0x22; OEM Java `BOND_BONDED`/virtual-unplug policy. A native UHID patch alone cannot provide wireless DS3 operation.
 
 **State:** source control flow directly verified; original M3 ELF alignment supported by PR #50 but no new binary inspection; no ARM32 build, no actual native callback-order proof, no device action, no runtime patch.
+
+## Confirmed additional hazard: BTA overwrites a single shared transaction tag
+
+Exact pinned `bta/hh/bta_hh_act.cc:1015-1058`:
+- `bta_hh_write_dev_act` issues `HID_HostWriteDev` for each API command.
+- If the write **succeeds**, `HID_TRANS_SET_REPORT`, `GET_REPORT`, `SET_PROTOCOL`, etc. assign `p_cb->w4_evt = event` at line 1057.
+- **There is no check here** to reject a new report transaction while `w4_evt` already represents an uncompleted one.
+- On **synchronous write failure**, lines 1035-1042 call the application callback directly with `BTA_HH_ERR` for non-CONTROL/DATA operations; this bypasses the `bta_hh_co_set_rpt_rsp` callback altogether. Any UHID ID waiting only on that callout could remain unanswered.
+- These observations establish an unsafe-to-assume serialization boundary, **not** that concurrent commands were observed on M3 or that lower layers cannot serialize them.
+
+**Patch implication:** the source fix must either serialize *all* relevant HID control-channel producers at the owning BTA level or introduce robust transaction identity across dispatch/completion. Ingress-only one-in-flight checks are inadequate; maintain a separate path for synchronous `HID_HostWriteDev` errors and reliable UHID error completion.
