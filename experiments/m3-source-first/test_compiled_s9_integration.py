@@ -29,14 +29,14 @@ def main():
     end=co.index("// A true value means BTA enqueue attempted",a)
     ingress=co[a:end]
     harness=r"""
-#include <cstdint>
+#include <cstdint>\n#include <cstddef>
 using bthh_report_type_t=int;
 struct BT_HDR {};
 struct btif_hh_device_t { int dev_handle; };
 constexpr int UHID_FEATURE_REPORT=1, UHID_OUTPUT_REPORT=2, UHID_INPUT_REPORT=3;
 constexpr int BTHH_FEATURE_REPORT=10,BTHH_OUTPUT_REPORT=20,BTHH_INPUT_REPORT=30;
 struct SetReport { uint32_t id; uint8_t rtype; uint16_t size; uint8_t data[4]; };
-struct Event { SetReport set_report; };
+struct Event { struct { SetReport set_report; } u; };
 bool fail_alloc=false; int sends=0; BT_HDR buffer;
 BT_HDR* create_pbuf(uint16_t,uint8_t*) { return fail_alloc?nullptr:&buffer; }
 void BTA_HhSetReport(int,int,BT_HDR*) { ++sends; }
@@ -48,16 +48,16 @@ return queued_locally;
 }
 int main() {
   btif_hh_device_t dev{8};
-  Event e{{0xffffffffu,UHID_FEATURE_REPORT,2,{0,1,0,0}}};
+  Event e{{{0xffffffffu,UHID_FEATURE_REPORT,2,{0,1,0,0}}}};
   fail_alloc=true;
   if(kernel_ingress(&dev,e) || sends!=0) return 1;
   fail_alloc=false;
   if(!kernel_ingress(&dev,e) || sends!=1) return 2;
-  e.set_report.rtype=UHID_INPUT_REPORT;
+  e.u.set_report.rtype=UHID_INPUT_REPORT;
   if(!kernel_ingress(&dev,e) || sends!=2) return 3;
   e.set_report.rtype=255;
   if(kernel_ingress(&dev,e) || sends!=2) return 4;
-  btif_hh_setreport(&dev,BTHH_FEATURE_REPORT,2,e.set_report.data);
+  btif_hh_setreport(&dev,BTHH_FEATURE_REPORT,2,e.u.set_report.data);
   return sends==3 ? 0 : 5;
 }
 """
