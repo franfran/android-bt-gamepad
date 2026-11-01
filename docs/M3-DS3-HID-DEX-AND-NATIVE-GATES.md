@@ -102,3 +102,22 @@ Android 12-era Fluoride upstream `btif_hh_virtual_unplug` sends the actual `BTA_
 https://android.googlesource.com/platform/system/bt/+/dc17388efd1c85b32c0ae52b2545f272fb6185d4/btif/src/btif_hh.cc
 
 **Practical consequence:** Do not present erasure of sixpair master address as established. Before any native auth workaround, account for both Java admission and VCU path, and insist on one-time enrollment restore/rollback plan.
+
+## 2026-11-01 priority reset: inspect earliest measured HCI authentication failure before further UHID engineering
+
+Re-opened the user's **exact 2024 original** `libbluetooth.so`, SHA-256 `4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85`, and surveyed its *actual* classic security strings (private original binary, offline only). Unlike an unsupported-only PIN implementation, original M3 firmware contains the following possible **distinct branches**:
+
+- `btm_sec_pin_code_request fixed pin replying` at original file offset `0xaac06`.
+- `btm_sec_pin_code_request going for callback` at `0x9d8e4`.
+- `btm_sec_pin_code_request going for remote name` at `0xce24e`.
+- `btm_sec_pin_code_request bonding sending reply` at `0x687a8`.
+- `BTM_PINCodeReply(): link is connecting so wait pin code request from peer` at `0x830b5`.
+- `btm_sec_pin_code_request() rejected - state: %s` at `0xb43c6`.
+
+These are concrete original-binary string observations, **not callsites or proof any specific branch was taken**. Their existence argues against blanket claims that the OEM stack has no internal PIN handling, or that changing Java `setPin` is the sole authentication fix. A direct comparison of original PIN-request dispatch and earlier HCI event evidence is required to tell which path is active.
+
+**Important diagnostic correction:** HCI `Authentication Complete` status `0x22` is `LMP Response Timeout`. It establishes a controller-level timeout, **not** by itself `PIN invalid` nor `Android automatically rejected an inbound DS3 because bond missing`. Distinguish the **measured** PIN requests, Android's attempted HCI PIN reply, remote peer response (unknown), and resulting timeout. The Java HID `okToConnect` bond check and the Linux UHID SET_REPORT callback deficit are *later gates*, and neither can explain an earlier `0x22` by itself.
+
+**Decision:** pause SET_REPORT implementation work after documenting the actual no-op callback and GET reply transport reference. Next source-grounded work should reconstruct the native **inbound HID PSM 0x11 security policy → HCI authentication request 0x0411 → PIN Code Request / Reply → 0x22** chain, correlating specific peer/PSM and respecting that this stripped binary may have several PIN branches. A valid M3-specific exception cannot be global, name-based, or derived solely from a spoofable BD_ADDR; physical USB master enrollment is evidence of host-targeting but not cryptographic remote identity or LinkKey. Any proposed narrow native policy must document exact authorization inputs and preserve default behavior for unrelated Classic Bluetooth peers. Do not guess PIN 0000, fabricate a bond, or bypass security globally.
+
+**Present gate:** still **NO_GO** for Bluetooth process injection, system APK/SO modification, restarting service and live pairing experiments. Continue offline binary inspection and safe implementation design only; no owner approval for target changes was requested or presumed.
