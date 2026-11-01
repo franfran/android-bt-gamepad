@@ -179,3 +179,23 @@ llvm-objdump -d --triple=thumbv7a \\
 ```
 
 Disassembly is **not** an injection, and this artifact must remain private: don't commit original ELF or full proprietary disassembly. A decompiler with ARM32 mixed-mode awareness, actual function recovery and data-flow tracking should next correlate `UHID_SET_REPORT_REPLY` (type 14), `write` to UHID fd, and the BTA response callback. Avoid treating symbol-less source matches as compiled M3 conclusions.
+
+## 2026-11-01 third pass: exact compiled Thumb reference to unsupported reply log VERIFIED
+
+Using the exact owner-original 2024 M3 native ELF (previously pinned SHA-256) and LLVM Thumb disassembly, a targeted scan for `ldr <reg>, [pc, ...]` followed by `add <reg>, pc` discovered an actual **PC-relative address construction** referencing the unsupported-reply error string and the callback's own name in the same code block.
+
+| Thumb instruction VMA | Instruction | Evidence |
+|---|---|---|
+| `0x1a6ffa` | `ldr r1, [pc, #0x14]` | Literal pool at VMA `0x1a7010` |
+| `0x1a7002` | `add r1, pc` | Literal signed displacement `-1256018`, resolves to `0x745b4` |
+| `0x1a7000` | `ldr r2, [pc, #0x10]` | Literal pool at VMA `0x1a7014` |
+| `0x1a7004` | `add r2, pc` | Literal signed displacement `-984943`, resolves to `0xb6899` |
+| `0x1a7006` | `b.w 0x2c07c8` | Branch into logging-related native code |
+
+The two resolved referenced C strings are EXACTLY:
+- `0x745b4` = `%s: Error: UHID_SET_REPORT_REPLY not supported`
+- `0xb6899` = `bta_hh_co_set_rpt_rsp`
+
+**Higher-confidence finding than string scan:** This original firmware's executable code **does reference an unsupported SET_REPORT_REPLY logging branch in the named callback context**. File-offset mapping for the relevant Thumb instructions requires subtracting `0x1000` from these ELF VMAs because of its PT_LOAD layout (e.g. `0x1a6ffa` maps to file offset `0x1a5ffa`). The literal pool also lies in executable section, so do NOT try to interpret pool data at `0x1a7010` as instructions.
+
+**Crucial remaining limits:** This code reference establishes a compiled log path, **not that every invocation of the callback reaches this branch**, and not absence of a separate native `UHID_SET_REPORT_REPLY` writer. Reachability/callers and all alternate reply writes still need dedicated control/data-flow recovery. Do not infer a working patch site from these address values, which are **offline VMAs, not actual process ASLR addresses or approved live hook points**. No device operation, library patch or injection performed.
