@@ -22,3 +22,5 @@ jobs:
         run: bash experiments/m3-source-first/run_host_tests.sh
       - name: Python source preflight syntax
         run: python3 -m py_compile experiments/m3-source-first/offline_preflight.py
+      - name: Offline source-contract fixture tests
+        run: python3 -m unittest discover -s experiments/m3-source-first -p 'test_source_contract.py' -v
