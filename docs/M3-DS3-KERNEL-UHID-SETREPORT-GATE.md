@@ -229,3 +229,26 @@ The PC-relative pool resolves to two C strings at ELF VMAs `0x745b4` and `0xb689
 **Defensible improved conclusion:** The identified `bta_hh_co_set_rpt_rsp` compiled native function is a **logging-only/no-op callback**. When logging disabled, it immediately returns. When logging enabled, it tail-calls logger and does not construct a UHID event or write a reply. This is now executable-body proof, not just a string xref. A normal invocation of this callback therefore cannot complete the kernel UHID SET_REPORT_REPLY transaction. **Caveat:** the rest of stripped M3 code has not yet been exhaustively examined to rule out another callback/writer; nor has live reachability from a DS3 event been observed. Therefore label the *specific callback* FAIL and *end-to-end device behavior* still CONDITIONAL/UNVERIFIED.
 
 This is a source-level **design blocker candidate**, not evidence that it caused the historical DS3 HCI auth error `0x22`: the auth failure occurs earlier than kernel HID probe. An eventual compat fix must preserve per-request UHID ID/status correlation and cannot simply force a generic OK or change security for unrelated devices. M3 live injector remains NO_GO; no owner device actions.
+
+## 2026-11-01 fifth pass: real callsite into compiled no-op callback
+
+The owner-original ELF disassembly has yielded a **direct Thumb BL callsite** to the previously recovered `bta_hh_co_set_rpt_rsp` logging-only stub:
+
+```asm
+0x15ca08: push  {r4,r5,r6,r7,lr}
+...
+0x15ca54: ldrh  r0,[r4,#0x1c]
+...
+0x15ca88: cmp   r0,#5
+0x15ca8e: bne   0x15cb1a
+0x15ca90: uxtb  r1,r1
+0x15ca92: mov   r0,r2
+0x15ca94: bl    0x1a6fec     ; documented logging-only callback
+0x15ca98: b     0x15cb18
+```
+
+This adds **compiled caller evidence**. It shows a callback dispatch path branches on a 16-bit field at offset 0x1c equal to **5**, then directly calls the no-op `0x1a6fec` function. **Do NOT misidentify 5 as Linux UHID event type 14**: the field belongs to the native callback dispatch context and its precise enum needs separate evidence. The same handler has a branch for field value 4 that calls `0x1a7018`, a different native helper.
+
+This observation significantly corroborates that the logging-only stub is not just orphaned debug text. Its *runtime activation in an actual DS3 session* remains unobserved. Other `UHID_SET_REPORT_REPLY` writers elsewhere in the ELF have not yet been exhaustively excluded. The documented kernel requirement is a matching UHID event with `type=14`; the stub `0x1a6fec` can never fulfill that requirement.
+
+For the 2024 M3 native binary, **callback-level finding: FAIL (no-op)**, **complete per-device UHID handshake: UNVERIFIED**, **live DS3 wireless: NOT TESTED**. HCI auth error 0x22 occurs prior to this HID probe path. Do not ship a patch based solely on this callsite; actual request-id correlation and Java admission still unresolved.
