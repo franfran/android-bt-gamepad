@@ -29,7 +29,8 @@ def main():
     end=co.index("// A true value means BTA enqueue attempted",a)
     ingress=co[a:end]
     harness=r"""
-#include <cstdint>\n#include <cstddef>
+#include <cstdint>
+#include <cstddef>
 using bthh_report_type_t=int;
 struct BT_HDR {};
 struct btif_hh_device_t { int dev_handle; };
