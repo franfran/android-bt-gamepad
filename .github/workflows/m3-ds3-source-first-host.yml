@@ -19,7 +19,7 @@ jobs:
       - name: Validate offline Android BSP build entry points
         run: |
           bash -n experiments/m3-source-first/build_bsp_arm32_offline.sh
-          python3 -m py_compile experiments/m3-source-first/apply_s9_to_pinned_bsp.py experiments/m3-source-first/full_bsp_build_preflight.py
+          python3 -m py_compile experiments/m3-source-first/apply_s9_to_pinned_bsp.py experiments/m3-source-first/full_bsp_build_preflight.py experiments/m3-source-first/compare_m3_bluetooth_elf.py
       - name: Verify compiler
         run: c++ --version
       - name: C++17 sanitizer host tests
