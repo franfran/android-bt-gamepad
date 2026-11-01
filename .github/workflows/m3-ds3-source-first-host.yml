@@ -38,3 +38,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_real_origin_boundary_patch.py
       - name: Verify real BTIF allocation-boundary patch
         run: python3 experiments/m3-source-first/test_real_btif_allocation_patch.py
+      - name: Compile extracted patched BTIF functions with GCC and Clang
+        run: python3 experiments/m3-source-first/test_compiled_btif_patch.py
