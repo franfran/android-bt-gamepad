@@ -32,3 +32,5 @@ jobs:
         run: python3 experiments/m3-source-first/check_experimental_patch_no_go.py
       - name: Verify request ID ingress patch against immutable BSP
         run: python3 experiments/m3-source-first/test_real_ingress_id_patch.py
+      - name: Verify pinned multi-producer ingress and allocation boundary
+        run: python3 experiments/m3-source-first/test_pinned_producer_paths.py
