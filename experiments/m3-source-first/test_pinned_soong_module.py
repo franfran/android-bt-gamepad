@@ -20,8 +20,9 @@ def main():
     for marker in required:
         if marker not in module:
             raise AssertionError("Soong dependency declaration changed: "+marker)
-    if 'srcs: [\n        ":LibBluetoothSources"' not in module:
-        raise AssertionError("Expected generated source group missing")
+    for needed in ['"libbtif"', '"libbt-bta"', '"libbt-stack"', '"libbluetooth_rust_interop"']:
+        if needed not in module:
+            raise AssertionError("Missing split-library dependency: "+needed)
     print("PASS: pinned libbluetooth Soong module structural audit; blob",sha)
     print("LIMIT: existence of module/dependencies, NOT resolved Android platform build")
     print("Missing platform checkout/out/soong, ARM32 product config, OEM ABI evidence")
