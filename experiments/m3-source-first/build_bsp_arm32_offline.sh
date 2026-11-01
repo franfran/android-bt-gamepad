@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Offline build host only. Never installs, flashes, or interacts with M3.
+set -euo pipefail
+if [[ $# -ne 2 ]]; then
+  echo "Usage: bash $0 /absolute/path/to/BPI-H618-Android12 /absolute/path/to/evidence-dir" >&2
+  exit 2
+fi
+ROOT="$(cd "$1" && pwd -P)"
+mkdir -p "$2"
+EVIDENCE="$(cd "$2" && pwd -P)"
+[[ "$EVIDENCE" != "$ROOT" && "$EVIDENCE" != "$ROOT/"* ]] || { echo "Evidence must be outside BSP source tree" >&2; exit 2; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+python3 "$SCRIPT_DIR/full_bsp_build_preflight.py" "$ROOT" | tee "$EVIDENCE/preflight.log"
+cd "$ROOT"
+# This candidate is directly declared by the pinned BSP AndroidProducts.mk.
+export BOARD_BUILD_BOX=true
+# Android build shell utilities are defined by envsetup.sh.
+source build/envsetup.sh
+lunch apollo_p1-userdebug
+printf 'TARGET_PRODUCT=%s\nTARGET_ARCH=%s\nTARGET_2ND_ARCH=%s\n' \
+  "$(get_build_var TARGET_PRODUCT)" "$(get_build_var TARGET_ARCH)" "$(get_build_var TARGET_2ND_ARCH)" \
+  | tee "$EVIDENCE/product-architecture.txt"
+[[ "$(get_build_var TARGET_PRODUCT)" == "apollo_p1" ]] || { echo "Unexpected product" >&2; exit 1; }
+ARCH="$(get_build_var TARGET_ARCH)"
+SECOND="$(get_build_var TARGET_2ND_ARCH)"
+[[ "$ARCH" == "arm" || "$SECOND" == "arm" ]] || { echo "NO_GO: product has no ARM32 ABI" >&2; exit 1; }
+# Baseline public BSP module build (S9 source transforms are NOT auto-applied).
+# pipefail preserves the build exit code.
+m libbluetooth -j2 2>&1 | tee "$EVIDENCE/soong-libbluetooth.log"
+PRODUCT_OUT="$(get_build_var PRODUCT_OUT)"
+OUT32="$PRODUCT_OUT/system/lib/libbluetooth.so"
+if [[ ! -f "$OUT32" ]]; then
+  echo "NO_GO: ARM32 product system/lib/libbluetooth.so not produced: $OUT32" >&2
+  exit 1
+fi
+cp "$OUT32" "$EVIDENCE/libbluetooth-arm32-baseline.so"
+file "$EVIDENCE/libbluetooth-arm32-baseline.so" | tee "$EVIDENCE/file.txt"
+readelf -h -d -Ws "$EVIDENCE/libbluetooth-arm32-baseline.so" > "$EVIDENCE/readelf.txt"
+sha256sum "$EVIDENCE/libbluetooth-arm32-baseline.so" | tee "$EVIDENCE/sha256.txt"
+readelf -h "$EVIDENCE/libbluetooth-arm32-baseline.so" | grep -q 'Class: *ELF32'
+readelf -h "$EVIDENCE/libbluetooth-arm32-baseline.so" | grep -q 'Machine: *ARM'
+echo "PASS: offline baseline ELF32 ARM libbluetooth output captured; OEM ABI NOT verified"
