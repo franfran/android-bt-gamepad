@@ -7,4 +7,8 @@ trap 'rm -f "$testbin"' EXIT
 "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
   -fsanitize=address,undefined -fno-omit-frame-pointer \
   experiments/m3-source-first/test_transaction_owner.cc -o "$testbin"
+"${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+  -fsanitize=address,undefined -fno-omit-frame-pointer \
+  experiments/m3-source-first/test_bta_w4_overwrite.cc -o "$testbin"
+"$testbin"
 "$testbin"
