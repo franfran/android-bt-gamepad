@@ -36,3 +36,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_pinned_producer_paths.py
       - name: Verify kernel SET origin boundary against immutable BSP
         run: python3 experiments/m3-source-first/test_real_origin_boundary_patch.py
+      - name: Verify real BTIF allocation-boundary patch
+        run: python3 experiments/m3-source-first/test_real_btif_allocation_patch.py
