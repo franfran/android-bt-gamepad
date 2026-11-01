@@ -300,3 +300,19 @@ In `0x1a5fb0` code, register args are r0=fd, r1=buffer, r2=`0x111c` before `blx 
 By contrast, original event 5 dispatch `0x15ca94` invokes the `0x1a6fec` *logging-only* `bta_hh_co_set_rpt_rsp` callback. This code is missing the analogous SET_REPORT reply event construction. **Callback-level SET reply gap is CONFIRMED.** It remains a separate task to exclude other `type=14` writers and verify the exact native kernel probe path in a real DS3 session. Do not say that this causes HCI auth failure 0x22 (it occurs earlier).
 
 Potential minimal remediation must use a bounded per-device pending-SET-report queue, preserve exact UHID request ID from `UHID_SET_REPORT`, correlate actual Bluetooth status, send `UHID_SET_REPORT_REPLY (type 14)` via original UHID fd with correct error and cleanup on disconnect/timeout. The original GET queue is a useful reference but must **not be shared** indiscriminately: GET and SET requests may be concurrent, IDs must be correlated by event kind and device. Never manufacture success status. No new system/APK patch or live hook was performed.
+
+## 2026-11-01 ninth pass: verify original GET reply guard, queue, and write-like contract
+
+Re-read original owner-provided SHA-pinned M3 ELF using `llvm-objdump --triple=thumbv7a` (without relying on incorrectly labelled stripped symbols). Confirmed exact instruction-level dataflow:
+
+- `0x1a7066`: helper lookup from HID handle; `cbz r0` at `0x1a706c` skips the normal reply path if no device.
+- `0x1a7070–0x1a7080`: checks per-device pointer at `+0x28`, fd at `+0x10` (`bmi` if invalid), and pending queue count byte at `+0x2c`; skips reply on a zero count.
+- `0x1a7082–0x1a7088`: decrements queue count and calls `0x2b430c`; `0x1a709e–0x1a70a0`: reads a 32-bit value from the returned queue object and stores it as UHID request ID.
+- `0x1a709a–0x1a709c`: writes `UHID_GET_REPORT_REPLY=10` to the outgoing `uhid_event` buffer.
+- `0x1a70a4–0x1a70a8`: writes the callback's returned status and report length to event fields. Full exact status conversion should be checked separately; no presumption that a success status is always justified.
+- `0x1a70fa–0x1a7110`: copies report payload for suitable length, loads the checked per-device fd and calls the common output helper `0x1a5fb0`.
+- `0x1a5fb8–0x1a5fc0`: helper sets `r0=fd`, `r1=event_buffer`, `r2=0x111c` and invokes an imported write-like function through `0x5dfe70`. On `-1`, checks errno and retries `EINTR=4`. To be precise, the imported PLT name has not yet been resolved in this pass; the calling convention and errno behavior are **consistent with write()**, not formal proof of relocation target.
+
+**Comparison with SET:** report event 5 from native dispatcher at `0x15ca94` leads to the fully recovered no-op `0x1a6fec` callback, not to this queue-consuming type-10 writer. GET's per-device queue should **not** be reused unchanged for SET: concurrent GET and SET requests need type isolation, matching originating UHID ID, bounded per-device storage, correct completion-status mapping, and teardown cleanup. There is still no proven active alternate UHID event-type 14 writer, and no evidence that the HCI auth timeout 0x22 was caused by this later bridge.
+
+This was a read-only re-examination of the private original M3 ELF; no M3 device communication, ELF patching, or hook was performed.
