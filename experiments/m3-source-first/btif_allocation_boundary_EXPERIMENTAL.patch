@@ -1,7 +1,7 @@
 diff --git a/system/bt/btif/src/btif_hh.cc b/system/bt/btif/src/btif_hh.cc
 --- a/system/bt/btif/src/btif_hh.cc
 +++ b/system/bt/btif/src/btif_hh.cc
-@@ -630,13 +630,23 @@
+@@ -630,10 +630,19 @@
 -void btif_hh_setreport(btif_hh_device_t* p_dev, bthh_report_type_t r_type,
 -                       uint16_t size, uint8_t* report) {
 +// RetroBox OFFLINE RESEARCH: expose only pre-BTA allocation acceptance.
