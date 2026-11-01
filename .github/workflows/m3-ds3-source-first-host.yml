@@ -1,0 +1,24 @@
+name: M3 DS3 source-first offline host tests
+on:
+  push:
+    branches:
+      - feat/m3-ds3-source-first
+  pull_request:
+    paths:
+      - 'experiments/m3-source-first/**'
+      - '.github/workflows/m3-ds3-source-first-host.yml'
+permissions:
+  contents: read
+jobs:
+  host-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify compiler
+        run: c++ --version
+      - name: C++17 sanitizer host tests
+        run: bash experiments/m3-source-first/run_host_tests.sh
+      - name: Python source preflight syntax
+        run: python3 -m py_compile experiments/m3-source-first/offline_preflight.py
