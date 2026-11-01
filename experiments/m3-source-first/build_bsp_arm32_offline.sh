@@ -13,7 +13,7 @@ EVIDENCE="$(cd "$2" && pwd -P)"
 [[ ! -e "$EVIDENCE/libbluetooth-arm32-$LABEL.so" ]] || { echo "NO_GO: evidence already exists (no overwrite)" >&2; exit 2; }
 [[ "$EVIDENCE" != "$ROOT" && "$EVIDENCE" != "$ROOT/"* ]] || { echo "Evidence must be outside BSP source tree" >&2; exit 2; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-python3 "$SCRIPT_DIR/full_bsp_build_preflight.py" "$ROOT" | tee "$EVIDENCE/preflight.log"
+python3 "$SCRIPT_DIR/full_bsp_build_preflight.py" "$ROOT" | tee "$EVIDENCE/preflight-$LABEL.log"
 cd "$ROOT"
 # This candidate is directly declared by the pinned BSP AndroidProducts.mk.
 export BOARD_BUILD_BOX=true
@@ -22,14 +22,14 @@ source build/envsetup.sh
 lunch apollo_p1-userdebug
 printf 'TARGET_PRODUCT=%s\nTARGET_ARCH=%s\nTARGET_2ND_ARCH=%s\n' \
   "$(get_build_var TARGET_PRODUCT)" "$(get_build_var TARGET_ARCH)" "$(get_build_var TARGET_2ND_ARCH)" \
-  | tee "$EVIDENCE/product-architecture.txt"
+  | tee "$EVIDENCE/product-architecture-$LABEL.txt"
 [[ "$(get_build_var TARGET_PRODUCT)" == "apollo_p1" ]] || { echo "Unexpected product" >&2; exit 1; }
 ARCH="$(get_build_var TARGET_ARCH)"
 SECOND="$(get_build_var TARGET_2ND_ARCH)"
 [[ "$ARCH" == "arm" || "$SECOND" == "arm" ]] || { echo "NO_GO: product has no ARM32 ABI" >&2; exit 1; }
 # Baseline public BSP module build (S9 source transforms are NOT auto-applied).
 # pipefail preserves the build exit code.
-m libbluetooth -j2 2>&1 | tee "$EVIDENCE/soong-libbluetooth.log"
+m libbluetooth -j2 2>&1 | tee "$EVIDENCE/soong-libbluetooth-$LABEL.log"
 PRODUCT_OUT="$(get_build_var PRODUCT_OUT)"
 OUT32="$PRODUCT_OUT/system/lib/libbluetooth.so"
 if [[ ! -f "$OUT32" ]]; then
@@ -37,9 +37,9 @@ if [[ ! -f "$OUT32" ]]; then
   exit 1
 fi
 cp "$OUT32" "$EVIDENCE/libbluetooth-arm32-$LABEL.so"
-file "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/file.txt"
-readelf -h -d -Ws "$EVIDENCE/libbluetooth-arm32-$LABEL.so" > "$EVIDENCE/readelf.txt"
-sha256sum "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/sha256.txt"
+file "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/file-$LABEL.txt"
+readelf -h -d -Ws "$EVIDENCE/libbluetooth-arm32-$LABEL.so" > "$EVIDENCE/readelf-$LABEL.txt"
+sha256sum "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/sha256-$LABEL.txt"
 readelf -h "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | grep -q 'Class: *ELF32'
 readelf -h "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | grep -q 'Machine: *ARM'
 echo "PASS: offline $LABEL ELF32 ARM libbluetooth output captured; OEM ABI NOT verified"
