@@ -135,3 +135,24 @@ python3 experiments/m3-hid-apk/audit_uhid_support.py \
 This first checks fingerprints, ABI, suspect logging strings and symbolic offline VMA/file-offsets. **Even a positive symbol/marker result is NOT a completed callgraph audit**. Next, original ARM32 disassembly must confirm the per-device `UHID_SET_REPORT` event dispatch, request ID preservation, actual response callback path and `UHID_SET_REPORT_REPLY` write. If it has only the old stub, label third gate FAIL and design a **real response-correlating bridge** offline; never forge ACKs to force driver probe. If full reply behavior is present, mark this bridge conditionally PASS and prioritize native authentication and Java HID admission instead.
 
 The actual ADB step is **optional operator-initiated read-only evidence collection**; the existing S7-C4C-3 prohibition on live injection and device modifications remains unchanged.
+
+## 2026-11-01: Actual original M3 native ELF and kernel config examined
+
+The Owner uploaded the actual installed 2024 native ELF and a gzip-compressed kernel config. Both were inspected offline without any M3 device operation.
+
+- Exact native ELF SHA-256: 4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85 (matches previously recorded S8).
+- ELF32 little-endian ARM EABI5, Android 31, stripped. Build-ID: 0d29a62178e43066e018216c1f1d5b18.
+- Actual kernel config: CONFIG_HID=y; CONFIG_HIDRAW=y; CONFIG_UHID=y; CONFIG_HID_SONY=y; CONFIG_INPUT_EVDEV=y. The kernel feature-build uncertainty is now RESOLVED; Bluetooth UHID binding remains unverified.
+- Native ELF .rodata has the exact log string "UHID_SET_REPORT_REPLY not supported" at file offset 0x745bf (substring), with nearby "%s: Error: " prefix. It also contains "bta_hh_co_set_rpt_rsp" at file offset 0xb6899; "p_dev->get_rpt_id_queue" at 0x81e79; and "UHID_SET_REPORT: Report type = %d, report_size = %d" at 0x8c460.
+- This cluster is strong original-M3 evidence consistent with the historically incomplete AOSP SET_REPORT response bridge. However, **strings alone do not prove the functions are reachable** or establish that no alternate working UHID reply path exists. The original ELF is stripped, so exact function callsites need actual Thumb/ARM disassembly and xrefs.
+
+| Finding | Result |
+|---|---|
+| Installed original ELF identity | PASS |
+| Kernel HID_SONY and UHID built in | PASS |
+| Unsupported SET_REPORT_REPLY log marker in original ELF | PRESENT |
+| Native callback execution and UHID reply callgraph | NOT VERIFIED |
+| Real BT DS3 driver binding/input | NOT TESTED |
+| Live injection/system patch | NO_GO |
+
+Next offline step: map the native literal to compiled callback xrefs and search for any matching UHID_SET_REPORT_REPLY writer, explicitly accounting for ARM Thumb PC-relative loads. Never elevate a present marker to runtime proof. No proprietary binaries or kernel configs committed to Git.
