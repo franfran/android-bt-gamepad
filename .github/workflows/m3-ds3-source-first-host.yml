@@ -50,3 +50,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_pinned_soong_module.py
       - name: Verify actual libbtif source membership in libbluetooth
         run: python3 experiments/m3-source-first/test_pinned_btif_build_membership.py
+      - name: Reject incomplete Android BSP checkout (safe preflight fixture)
+        run: python3 experiments/m3-source-first/test_full_bsp_build_preflight.py
