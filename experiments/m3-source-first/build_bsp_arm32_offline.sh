@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Offline build host only. Never installs, flashes, or interacts with M3.
 set -euo pipefail
-if [[ $# -ne 2 ]]; then
-  echo "Usage: bash $0 /absolute/path/to/BPI-H618-Android12 /absolute/path/to/evidence-dir" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "Usage: bash $0 /absolute/path/to/BPI-H618-Android12 /absolute/path/to/evidence-dir [baseline|s9]" >&2
   exit 2
 fi
+LABEL="${3:-baseline}"
+[[ "$LABEL" == "baseline" || "$LABEL" == "s9" ]] || { echo "Unknown label" >&2; exit 2; }
 ROOT="$(cd "$1" && pwd -P)"
 mkdir -p "$2"
 EVIDENCE="$(cd "$2" && pwd -P)"
+[[ ! -e "$EVIDENCE/libbluetooth-arm32-$LABEL.so" ]] || { echo "NO_GO: evidence already exists (no overwrite)" >&2; exit 2; }
 [[ "$EVIDENCE" != "$ROOT" && "$EVIDENCE" != "$ROOT/"* ]] || { echo "Evidence must be outside BSP source tree" >&2; exit 2; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 python3 "$SCRIPT_DIR/full_bsp_build_preflight.py" "$ROOT" | tee "$EVIDENCE/preflight.log"
@@ -33,10 +36,10 @@ if [[ ! -f "$OUT32" ]]; then
   echo "NO_GO: ARM32 product system/lib/libbluetooth.so not produced: $OUT32" >&2
   exit 1
 fi
-cp "$OUT32" "$EVIDENCE/libbluetooth-arm32-baseline.so"
-file "$EVIDENCE/libbluetooth-arm32-baseline.so" | tee "$EVIDENCE/file.txt"
-readelf -h -d -Ws "$EVIDENCE/libbluetooth-arm32-baseline.so" > "$EVIDENCE/readelf.txt"
-sha256sum "$EVIDENCE/libbluetooth-arm32-baseline.so" | tee "$EVIDENCE/sha256.txt"
-readelf -h "$EVIDENCE/libbluetooth-arm32-baseline.so" | grep -q 'Class: *ELF32'
-readelf -h "$EVIDENCE/libbluetooth-arm32-baseline.so" | grep -q 'Machine: *ARM'
-echo "PASS: offline baseline ELF32 ARM libbluetooth output captured; OEM ABI NOT verified"
+cp "$OUT32" "$EVIDENCE/libbluetooth-arm32-$LABEL.so"
+file "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/file.txt"
+readelf -h -d -Ws "$EVIDENCE/libbluetooth-arm32-$LABEL.so" > "$EVIDENCE/readelf.txt"
+sha256sum "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | tee "$EVIDENCE/sha256.txt"
+readelf -h "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | grep -q 'Class: *ELF32'
+readelf -h "$EVIDENCE/libbluetooth-arm32-$LABEL.so" | grep -q 'Machine: *ARM'
+echo "PASS: offline $LABEL ELF32 ARM libbluetooth output captured; OEM ABI NOT verified"
