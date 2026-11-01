@@ -52,3 +52,5 @@ jobs:
         run: python3 experiments/m3-source-first/test_pinned_btif_build_membership.py
       - name: Reject incomplete Android BSP checkout (safe preflight fixture)
         run: python3 experiments/m3-source-first/test_full_bsp_build_preflight.py
+      - name: Verify pinned Apollo P1 candidate lunch target
+        run: python3 experiments/m3-source-first/test_pinned_apollo_p1_target.py
