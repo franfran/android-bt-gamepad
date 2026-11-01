@@ -422,3 +422,17 @@ The dispatcher **does** retain an outstanding event code in the device control b
 The fail-closed Python transaction model updated in previous turn was reproduced locally in the current runtime with its eight unit-test cases: **8/8 PASS** (host-only, not M3); previous unsafe reset API remains removed. This validates model invariants only, **NOT real native order/lifetime safety**.
 
 For actual implementation review, first establish whether M3's native queue rejects concurrent SETs/overwrites `w4_evt`, whether a delayed completion can be misclassified after reuse, and how a detached/reconnected device invalidates old callbacks. Do not ship kernel replies from this model or interpret a simple `w4_evt` flag as a transaction ID. No M3 live changes or S7-C4C approval.
+
+## 2026-11-01: Native pending-event setter located; concurrent SET overwrite still unresolved
+
+Directly disassembled owner-uploaded original 2024 SHA-pinned M3 ARM32 ELF, searching its actual halfword stores and reconstructing the command dispatcher `0x15d180–0x15d288`:
+
+- `0x15d18c ldrb r7,[r1,#8]` picks an internal command/event-type byte from command wrapper.
+- `0x15d1d8 bl 0x27e684` calls a shared connection/dispatch helper, returns status in `r0`.
+- If status is nonzero, `0x15d1dc cbz r0,0x15d218` **does not branch** and follows an error/event handling path. If status is zero, control branches to `0x15d218`.
+- `0x15d218 ldrb r3,[r6,#8]`, `0x15d21a subs r0,r3,#4`, `0x15d21c cmp r0,#6`, `0x15d21e bhs 0x15d23a`: internal commands in the range 4..9 enter next block.
+- `0x15d220 strh r7,[r4,#0x1c]`: **writes the awaited native event class to per-device `w4_evt`**. The previously proven native completion handler at `0x15ca54` reads this same field and at `0x15cb2c` clears it.
+
+**Crucial caveat:** there is **no local compare/test of the *previous* `[r4,#0x1c]` value** immediately before this write. But `0x27e684` does have connection/channel state checks and calls an additional helper `0x27eac4`; its result gates the setter. This does **not** establish that an overlapping second SET command can reach the store, nor that Bluetooth transaction ordering is serial. Until native queue and state-machine admission are traced, pending-event **overwrite is a plausible hazard, not a demonstrated runtime bug**.
+
+**Engineering consequences:** refuse to use `w4_evt` as a UHID transaction ID, do not claim safe FIFO order; enforce one-in-flight at the ingress boundary *before* sending native messages and require proof that legacy transport cannot emit stale callbacks against a reused session. Continue prioritizing measured HCI auth 0x22 and Java HID Host bond gate; this UHID gap is later in the path. Only offline original-ELF inspection was performed. No M3 changes, injection, security bypass, or live Bluetooth restart.
