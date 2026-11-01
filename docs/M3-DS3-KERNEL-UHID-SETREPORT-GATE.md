@@ -316,3 +316,13 @@ Re-read original owner-provided SHA-pinned M3 ELF using `llvm-objdump --triple=t
 **Comparison with SET:** report event 5 from native dispatcher at `0x15ca94` leads to the fully recovered no-op `0x1a6fec` callback, not to this queue-consuming type-10 writer. GET's per-device queue should **not** be reused unchanged for SET: concurrent GET and SET requests need type isolation, matching originating UHID ID, bounded per-device storage, correct completion-status mapping, and teardown cleanup. There is still no proven active alternate UHID event-type 14 writer, and no evidence that the HCI auth timeout 0x22 was caused by this later bridge.
 
 This was a read-only re-examination of the private original M3 ELF; no M3 device communication, ELF patching, or hook was performed.
+
+### Imported writer identification resolved in the same original ELF
+
+Additional static relocation proof resolves the generic write-like call to actual libc `write`:
+
+- ELF `.plt` at VMA `0x5dee30`; the referenced PLT entry `0x5dfe70` is 0x1040 bytes into `.plt`, or slot 260 of the 16-byte-entry region.
+- ELF `.got.plt` at VMA `0x5ff534`. Relocation `R_ARM_JUMP_SLOT` at **`0x5ff948`** resolves to **`write@LIBC`** (visible in `readelf -rW`).
+- The PLT/GOT slot correspondence supports `0x5dfe70` as the `write` trampoline. At `0x1a5fbc` caller explicitly sets `r2=0x111c` then `blx 0x5dfe70`. Error path at `0x1a5fca–0x1a5fd2` checks `errno==EINTR(4)` and retries, characteristic of the same `write` wrapper.
+
+**Original M3 GET_REPORT_REPLY writer now verified as libc write via actual relocation**, rather than only a suspected write-like call. This does not prove SET_REPORT_REPLY event 14 writer exists.
