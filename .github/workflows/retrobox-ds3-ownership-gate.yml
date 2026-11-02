@@ -1,0 +1,29 @@
+name: RetroBox DS3 Pinned H618 Ownership Gate (Host Only)
+
+on:
+  push:
+    branches:
+      - research/m3-ds3-compat-adapter
+    paths:
+      - "experiments/m3-ds3-compat-adapter/**"
+      - ".github/workflows/retrobox-ds3-ownership-gate.yml"
+  pull_request:
+    paths:
+      - "experiments/m3-ds3-compat-adapter/**"
+      - ".github/workflows/retrobox-ds3-ownership-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ownership-source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify exact pinned H618 blobs and fixed-PSM callback ownership (no device)
+        run: |
+          python3 experiments/m3-ds3-compat-adapter/verify_transport_ownership.py
