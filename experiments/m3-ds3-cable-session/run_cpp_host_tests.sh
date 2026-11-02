@@ -17,3 +17,7 @@ CXX=${CXX:-g++}
   "$HERE/session_descriptor_envelope.cc" \
   "$HERE/test_private_descriptor_wire.cc" -o "$OUT/check_wire"
 "$OUT/check_wire"
+"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic \
+  "$HERE/session_descriptor_envelope.cc" \
+  "$HERE/test_private_checked_dispatch.cc" -o "$OUT/check_checked"
+"$OUT/check_checked"
