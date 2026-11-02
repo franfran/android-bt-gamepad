@@ -75,3 +75,14 @@ The tool prints a **sanitized report**. Review even sanitized metadata before sh
 **Next decisive offline action:** obtain the *same already-collected private OEM ELF and JNI/APK bytes* in a session with authorized raw access and run the pinned read-only metadata scan plus explicit callsite verification. If a plausible load mechanism is found, trace its ABI to HCI/BTM/HID, Java and UHID; if not, record bounded OEM-version NO_GO with exact negative coverage. Do **not** label plugin "impossible" until OEM-specific evidence is adequate or mark the question UNRESOLVED if it is inaccessible.
 
 No hardware runtime operations, no additional permissions granted, no plugin loaded, no changes to M3. PR #52 stays Draft.
+
+
+## S7 add-on experiment is **not** an OEM-supported plugin interface
+
+Existing [S7-C4C handoff](S7-C4C-HANDOVER.md) documents ARM32 \`dlopen\`/sandbox tests **only in independent owned/fork-owned processes** and read-only inspection of actual Bluetooth target. The target C4B snapshot explicitly recorded **\`addon.mapped=false\`**, \`injection_authorized=false\`, and unresolved live Bluetooth linker namespace/recovery. [Stage 3D addon loader script](../experiments/stage3d-addon-loader/run-on-m3.sh) itself declares "no Bluetooth process injection" and runs the loader as a separate process.
+
+This proves that **an arbitrary executable can link/load a test add-on in its own process**, not that the OEM Bluetooth process will load a user-supplied \`.so\` by configuration or expose supported BTM/HID callbacks. Root-only remote \`dlopen\`, \`ptrace\`, linker interposition and process injection do not count as the required **supported/removable plugin interface**, and they remain outside this PR's authorized scope. Do not restart those experiments while plugin feasibility is being decided.
+
+## Latest privacy-hardened CI confirmation
+
+[GitHub Actions run 41469779259](https://github.com/franfran/android-bt-gamepad/actions/runs/41469779259), commit \`11d657b\`, completed **SUCCESS** after the error-path redaction fix. [Run 41469942991](https://github.com/franfran/android-bt-gamepad/actions/runs/41469942991) also **SUCCESS** at the initial report head. CI checks the mock loader-metadata logic only; original M3 2024 proprietary bytes were **not** present in runner.
