@@ -36,10 +36,6 @@ def verify_source_only():
                 line for line in part.splitlines()
                 if line.startswith("-") and not line.startswith("---")
             ], f"patch unexpectedly changes original source: {path}"
-            hunks = part.split("\n@@ ")[1:]
-            if not hunks:
-                # First hunk starts at a line beginning '@@', not '\n@@'
-                hunks = part.split("@@ -")[1:]
             for fragment in part.splitlines():
                 if fragment.startswith("+#if"):
                     assert FLAG in fragment
@@ -48,10 +44,6 @@ def verify_source_only():
     assert "BTA_SEC_AUTHENTICATE" not in patch
     assert "BTM_SUCCESS_NO_SECURITY" not in patch
     assert "BOND_BONDED" not in patch
-    for x in ("l2c_link_hci_conn_comp", "l2c_link_hci_disc_comp",
-              "l2cu_release_lcb", "l2c_link_sec_comp2"):
-        # Marker functions may be outside hunks. The audited context is source.
-        pass
     for anchor in ("LST_CONNECTED", "SetDisconnectReason(reason)",
                    "retrobox_acl_retire_for_lcb", "CST_TERM_W4_SEC_COMP",
                    "if (p_ccb == p_ref_data)"):
