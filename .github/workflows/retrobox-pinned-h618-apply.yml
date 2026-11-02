@@ -31,3 +31,9 @@ jobs:
           persist-credentials: false
       - name: Check upstream pinned Git blobs and apply contexts
         run: python3 experiments/m3-ds3-cable-session/verify_h618_pinned_git_apply.py --profile all
+      - name: Compile source-extracted JNI with strict host sanitizers
+        run: python3 experiments/m3-ds3-cable-session/test_h618_jni_candidate_cpp_patch.py
+      - name: Compile source-extracted Java callback with javac
+        run: |
+          javac -version
+          python3 experiments/m3-ds3-cable-session/test_h618_jni_java_deny_only_patch.py
