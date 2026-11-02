@@ -27,3 +27,6 @@ python3 "$HERE/test_h618_btm_auth_observe_patch.py"
 python3 "$HERE/verify_h618_acl_epoch_observer.py"
 python3 "$HERE/verify_h618_request_bound_callback.py"
 python3 "$HERE/test_h618_request_bound_callback_patch.py"
+"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic \
+  "$HERE/test_usb_enrollment.cc" -o "$OUT/check_usb_enrollment"
+"$OUT/check_usb_enrollment"
