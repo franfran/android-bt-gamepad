@@ -33,3 +33,4 @@ python3 "$HERE/test_h618_request_bound_callback_patch.py"
 "$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic \
   "$HERE/test_java_admission_bridge.cc" -o "$OUT/check_java_admission"
 "$OUT/check_java_admission"
+python3 "$HERE/test_h618_jni_candidate_cpp_patch.py"
