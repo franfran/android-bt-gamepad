@@ -21,3 +21,4 @@ CXX=${CXX:-g++}
   "$HERE/session_descriptor_envelope.cc" \
   "$HERE/test_private_checked_dispatch.cc" -o "$OUT/check_checked"
 "$OUT/check_checked"
+python3 "$HERE/test_h618_checked_bytes_patch.py"
