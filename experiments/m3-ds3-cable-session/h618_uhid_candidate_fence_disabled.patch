@@ -1,0 +1,147 @@
+diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
+--- a/system/bt/btif/co/bta_hh_co.cc
++++ b/system/bt/btif/co/bta_hh_co.cc
+@@ -31,7 +31,10 @@
+ #include "bta_api.h"
+ #include "bta_hh_api.h"
+ #include "bta_hh_co.h"
+ #include "btif_hh.h"
++#if defined(RETROBOX_DS3_UHID_FENCE_RESEARCH)
++#include "retrobox_candidate_uhid_fence.h"
++#endif
+ #include "btif_util.h"
+ #include "osi/include/osi.h"
+ 
+@@ -35,7 +38,20 @@
+ #include "btif_util.h"
+ #include "osi/include/osi.h"
+ 
+ const char* dev_path = "/dev/uhid";
++#if defined(RETROBOX_DS3_UHID_FENCE_RESEARCH)
++namespace {
++retrobox::CandidateUhidFence g_retrobox_candidate_fence;
++}
++// No callers in this patch. A trusted Native classifier MUST be built
++// separately; registering a candidate never authorizes Bluetooth or UHID.
++bool retrobox_register_uhid_candidate(retrobox::FenceTicket ticket) {
++  return g_retrobox_candidate_fence.RegisterCandidate(ticket);
++}
++bool retrobox_revoke_uhid_candidate(retrobox::FenceTicket ticket) {
++  return g_retrobox_candidate_fence.Revoke(ticket);
++}
++#endif
+ 
+ #include "btif_config.h"
+ #define BTA_HH_NV_LOAD_MAX 16
+@@ -60,8 +76,18 @@
+ 
+ /*Internal function to perform UHID write and error checking*/
+ static int uhid_write(int fd, const struct uhid_event* ev) {
+-  ssize_t ret;
+-  OSI_NO_INTR(ret = write(fd, ev, sizeof(*ev)));
++  ssize_t ret;
++#if defined(RETROBOX_DS3_UHID_FENCE_RESEARCH)
++  // Final kernel write barrier: only explicitly registered candidate fds.
++  // Normal unregistered HID events retain the original path. No grant API.
++  if (ev != nullptr &&
++      (ev->type == UHID_CREATE || ev->type == UHID_INPUT) &&
++      !g_retrobox_candidate_fence.AllowKernelEvent(fd, true)) {
++    APPL_TRACE_WARNING("RetroBox candidate UHID event denied");
++    return -EACCES;
++  }
++#endif
++  OSI_NO_INTR(ret = write(fd, ev, sizeof(*ev)));
+ 
+   if (ret < 0) {
+     int rtn = -errno;
+diff --git a/system/bt/btif/co/retrobox_candidate_uhid_fence.h b/system/bt/btif/co/retrobox_candidate_uhid_fence.h
+new file mode 100644
+--- /dev/null
++++ b/system/bt/btif/co/retrobox_candidate_uhid_fence.h
+@@ -0,0 +1,86 @@
++// Offline candidate-only UHID deny fence. No source of trusted identity here.
++#ifndef RETROBOX_CANDIDATE_UHID_FENCE_H_
++#define RETROBOX_CANDIDATE_UHID_FENCE_H_
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <mutex>
++#include <optional>
++
++namespace retrobox {
++struct FenceTicket {
++  int fd;
++  uint8_t handle;
++  uint64_t acl_epoch;
++  uint64_t request_id;
++  bool operator==(const FenceTicket& rhs) const {
++    return fd == rhs.fd && handle == rhs.handle &&
++           acl_epoch == rhs.acl_epoch && request_id == rhs.request_id;
++  }
++};
++
++class CandidateUhidFence {
++ public:
++  static constexpr size_t kCapacity = 8;
++
++  // Caller MUST already have trusted Native candidate classification.
++  // Failure is NOT permission to proceed with ordinary HID.
++  bool RegisterCandidate(FenceTicket ticket) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (ticket.fd < 0 || ticket.handle == 0xff ||
++        !ticket.acl_epoch || !ticket.request_id) return false;
++    for (const auto& slot : slots_) {
++      if (slot.active && (slot.ticket.fd == ticket.fd ||
++                          slot.ticket.handle == ticket.handle))
++        return false;
++    }
++    for (auto& slot : slots_) {
++      if (!slot.active) {
++        slot.ticket = ticket;
++        slot.active = true;
++        return true;
++      }
++    }
++    return false;  // must reject candidate if registry is exhausted
++  }
++
++  // Return false for BOTH CREATE and INPUT whenever candidate is pending.
++  // There is deliberately no approval operation in this research class.
++  bool AllowKernelEvent(int fd, bool is_create_or_input) const {
++    if (!is_create_or_input) return true;
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (const auto& slot : slots_) {
++      if (slot.active && slot.ticket.fd == fd) return false;
++    }
++    return true;  // ordinary, unclassified, existing bonded HID path
++  }
++
++  bool Revoke(FenceTicket ticket) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (auto& slot : slots_) {
++      if (slot.active && slot.ticket == ticket) {
++        slot.active = false;
++        return true;
++      }
++    }
++    return false;  // stale disconnect cannot clear a replacement ticket
++  }
++
++  size_t Pending() const {
++    std::lock_guard<std::mutex> lock(mutex_);
++    size_t result = 0;
++    for (const auto& slot : slots_) result += slot.active;
++    return result;
++  }
++
++ private:
++  struct Slot {
++    FenceTicket ticket{};
++    bool active = false;
++  };
++  mutable std::mutex mutex_;
++  std::array<Slot, kCapacity> slots_{};
++};
++}  // namespace retrobox
++#endif  // RETROBOX_CANDIDATE_UHID_FENCE_H_
