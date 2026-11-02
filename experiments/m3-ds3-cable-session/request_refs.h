@@ -80,6 +80,11 @@ class RequestRefPool {
     }
     return result;
   }
+  std::optional<RequestIdentity> PendingIdentity(void* opaque) {
+    Slot* slot = Find(opaque);
+    if (!slot || slot->state != State::kActive) return std::nullopt;
+    return slot->id;
+  }
   size_t Issued() const { return next_; }
 
  private:
