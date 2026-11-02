@@ -48,3 +48,30 @@ Both require immutable session generation minted from actual ACL/HID lifecycle, 
 4. Keep descriptor validation/report validation before kernel UHID for the candidate path; no actual M3 source binary, target compilation, HCI link or successful wireless RetroArch state has been demonstrated.
 
 **Decision: host-model copy/cleanup verification PASS; real BTA→BTIF integration and live Bluetooth security exception remain NO_GO.** No M3 operations or changes to PR #50/#51.
+
+
+## Follow-on: bytewise-transferable, pointer-free event prototype
+
+The first queue model stores owned C++ \`std::vector\` values **inside its local queue**; it is intentionally **not** a native \`btif_transfer_context\` event type. To test the missing concrete source constraint, a second prototype was added:
+
+- \`experiments/m3-ds3-cable-session/private_descriptor_wire.h\`
+- \`experiments/m3-ds3-cable-session/test_private_descriptor_wire.cc\`
+
+\`PrivateDescriptorWire\` encodes an **illustrative 16-byte byte-only prefix** (4-byte test magic, 1-byte version, 1-byte HID handle, 8-byte little-endian host model generation, 2-byte little-endian length), followed by copied descriptor bytes. No pointer, \`std::vector\`, string object or process-relative address is present **inside the serialized event bytes**. It checks exact blob length and rejects bad versions, truncated/trailing payload, zero generation and invalid lengths. \`PrivateWireQueue\` models bounded queueing and explicit post failure with no pending allocation. A receiving consumer revalidates the ticket through the previously compiled \`DescriptorGate\`.
+
+This format is a **host test fixture only**, not a registered H618 event number, stable Bluetooth ABI, authenticated source, privileged grant, completed HID descriptor parser, or proposed wire format for an actual device. The chosen test magic and 4096-byte fixture ceiling are arbitrary model constants. Actual source integration must define source-controlled private message dispatch/ownership and consider byte-limit integer overflow, callback lifetime, local thread scheduling and cleanup.
+
+**Host result (tested in local isolated Linux container):**
+\`\`\`text
+g++ -std=c++17 -Wall -Wextra -Werror -pedantic test_private_descriptor_wire.cc session_descriptor_envelope.cc -o test_wire
+./test_wire
+31/31 checks PASS (pointer-free byte wire model)
+
+g++ -std=c++17 -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined -fno-omit-frame-pointer test_private_descriptor_wire.cc session_descriptor_envelope.cc -o test_wire_san
+ASAN_OPTIONS=detect_leaks=1 ./test_wire_san
+31/31 checks PASS (pointer-free byte wire model)
+\`\`\`
+
+The shell runner \`run_cpp_host_tests.sh\` was updated to run **three** host-only suites: existing envelope (17 cases), owning event queue (37 checks), and bytewise transport (31 checks). **Only the new 37/31 suites and their sanitizer runs were independently executed in this increment**; see the earlier commit for the original 17-case suite result.
+
+**Current GO:** further offline design and negative testing. **Current NO_GO:** treating either queue representation as a drop-in Fluoride structure, real unbonded HID admission, native↔Java capability, target compilation or M3 deployment. A credible next source effort must define a private callback with owned allocation and **checked enqueue result**, including a complete cleanup path for both normal and failure cases; stock \`btif_transfer_context\` does not automatically supply that contract.
