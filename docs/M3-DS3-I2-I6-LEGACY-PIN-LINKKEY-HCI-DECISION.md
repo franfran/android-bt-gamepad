@@ -41,7 +41,7 @@ The final ten source hunks were independently checked against the exact pinned H
 
 The analyzer ignores non-observer text, emits only whitelisted summary metadata, and refuses causal analysis when multiple PIN requests or HCI completions are interleaved without peer/session IDs.
 
-**13/13 synthetic scenarios PASS** in a local equivalent interpreter re-execution of the classifier logic. The exact committed Python scripts and full runner have NOT been executed in this increment. Do not report the equivalent interpreter check as a live capture or Android test.
+**13/13 synthetic scenarios PASS on GitHub Actions**. The committed verifier and unit-test file were executed by the new least-privilege workflow [RetroBox DS3 Legacy Auth Trace (Host Only), run 41454023911](https://github.com/franfran/android-bt-gamepad/actions/runs/41454023911): log confirms `Ran 13 tests`, `OK`, and `PASS: source additions are guarded, metadata-only, and read-only`. Existing [RetroBox research source checks, run 41454023889](https://github.com/franfran/android-bt-gamepad/actions/runs/41454023889) also completed successfully. The separate full C++ host runner, full pinned BSP apply check, Android build and actual M3 test were NOT run. No genuine radio trace was tested.
 
 Reproduce locally on the repo checkout:
 
