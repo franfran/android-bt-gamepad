@@ -62,6 +62,16 @@ class SanitizedHciTimeoutTests(unittest.TestCase):
                          report["classification"])
         self.assertTrue(report["pin_negative_reply_hci_command_observed"])
 
+    def test_late_pin_reply_after_auth_completion_is_not_credit(self):
+        data = sample()
+        data["events"].insert(-1, {"elapsed_ms": 30072, "kind": "pin_code_reply"})
+        self.assertEqual("AMBIGUOUS_HCI_WINDOW", classify(data)["classification"])
+
+    def test_missing_connection_complete_is_ambiguous(self):
+        data = sample()
+        del data["events"][0]
+        self.assertEqual("AMBIGUOUS_HCI_WINDOW", classify(data)["classification"])
+
     def test_multiple_pin_requests_ambiguous(self):
         data = sample()
         data["events"].insert(-2, {"elapsed_ms": 20, "kind": "pin_code_request"})
