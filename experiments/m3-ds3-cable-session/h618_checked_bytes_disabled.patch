@@ -1,0 +1,60 @@
+diff --git a/system/bt/btif/include/btif_common.h b/system/bt/btif/include/btif_common.h
+--- a/system/bt/btif/include/btif_common.h
++++ b/system/bt/btif/include/btif_common.h
+@@ -188,9 +188,15 @@
+ void bte_load_did_conf(const char* p_path);
+ void bte_main_init(void);
+ 
+ bt_status_t btif_transfer_context(tBTIF_CBACK* p_cback, uint16_t event,
+                                   char* p_params, int param_len,
+                                   tBTIF_COPY_CBACK* p_copy_cback);
++#if defined(RETROBOX_DS3_PRIVATE_DESCRIPTOR_RESEARCH)
++// Disabled-by-default private raw-byte transport seam. Not DS3 admission.
++bt_status_t btif_transfer_context_checked_bytes(tBTIF_CBACK* p_cback,
++                                               uint16_t event,
++                                               const char* bytes, int byte_len);
++#endif
+ 
+ void btif_init_ok();
+ 
+diff --git a/system/bt/btif/src/btif_core.cc b/system/bt/btif/src/btif_core.cc
+--- a/system/bt/btif/src/btif_core.cc
++++ b/system/bt/btif/src/btif_core.cc
+@@ -146,10 +146,37 @@
+     memcpy(p_msg->p_param, p_params, param_len); /* callback parameter data */
+   }
+ 
+   do_in_jni_thread(base::Bind(&bt_jni_msg_ready, p_msg));
+   return BT_STATUS_SUCCESS;
+ }
+ 
++#if defined(RETROBOX_DS3_PRIVATE_DESCRIPTOR_RESEARCH)
++// Private research-only byte payload post. Not wired to BTA or to HID/Java.
++// Caller MUST encode an owned pointer-free, bounded event with a session ticket.
++// This entry point does not authorize any Bluetooth operation.
++bt_status_t btif_transfer_context_checked_bytes(tBTIF_CBACK* p_cback,
++                                               uint16_t event,
++                                               const char* bytes, int byte_len) {
++  constexpr int kMaxResearchPayloadBytes = 4112; // Fixture limit, not DS3 spec
++  if (p_cback == nullptr || bytes == nullptr || byte_len <= 0 ||
++      byte_len > kMaxResearchPayloadBytes) {
++    return BT_STATUS_FAIL;
++  }
++  auto* p_msg = static_cast<tBTIF_CONTEXT_SWITCH_CBACK*>(
++      osi_malloc(sizeof(tBTIF_CONTEXT_SWITCH_CBACK) +
++                 static_cast<size_t>(byte_len)));
++  p_msg->hdr.event = BT_EVT_CONTEXT_SWITCH_EVT;
++  p_msg->p_cb = p_cback;
++  p_msg->event = event;
++  memcpy(p_msg->p_param, bytes, static_cast<size_t>(byte_len));
++  const bt_status_t result =
++      do_in_jni_thread(base::Bind(&bt_jni_msg_ready, p_msg));
++  if (result != BT_STATUS_SUCCESS) {
++    osi_free(p_msg); // No task was enqueued when DoInThread reports failure.
++  }
++  return result;
++}
++#endif
+ /**
+  * This function posts a task into the btif message loop, that executes it in
+  * the JNI message loop.
