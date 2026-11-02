@@ -1,3 +1,5 @@
+> **EVIDENCE UPDATE (2026-11-02):** This file was written before the [direct four-attempt HCI packet audit](M3-DS3-I2-UPLOADED-HCI-FOUR-ATTEMPTS.md) became available. Its old claim that only uncorrelated historical summaries exist is **superseded**: the Oct 29–30 btsnoop has four internally timestamp-correlated DS3 windows, each showing HCI PIN Code Request, **no captured host PIN Reply/Negative Reply command**, and an Authentication Complete **status 0x22 = LMP Response Timeout** after ~30.06 s. The separate Oct 31 Android `onPair:null` logcat remains **not same-attempt correlated**. See [source-backed plugin implications and BlueZ cable pairing comparison](M3-DS3-I2-HCI-0X22-BLUEZ-CABLE-PAIRING-VS-PLUGIN.md). This establishes a *first observed missing reply*, not an incorrect PIN, guaranteed root cause, or proven third-party plugin interface.
+
 # I2 — Historical PIN / timeout evidence and causal limits
 
 Status: offline historical-document review only. Updated from PR #50 documents, not from a new live controller capture.
