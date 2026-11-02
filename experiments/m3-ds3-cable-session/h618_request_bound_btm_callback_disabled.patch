@@ -1,8 +1,7 @@
 diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.cc
 --- a/system/bt/stack/l2cap/l2c_link.cc
 +++ b/system/bt/stack/l2cap/l2c_link.cc
-@@ -32,7 +32,11 @@
- #include "main/shim/shim.h"
+@@ -36,6 +36,10 @@
  #include "osi/include/log.h"
  #include "osi/include/osi.h"
  #include "stack/btm/btm_int_types.h"
@@ -13,12 +12,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
  #include "stack/include/acl_api.h"
  #include "stack/include/bt_types.h"
  #include "stack/include/hci_error_code.h"
-@@ -263,11 +267,82 @@
-  * Returns          void
-  *
-  ******************************************************************************/
- void l2c_link_sec_comp(const RawAddress* p_bda,
-                        UNUSED_ATTR tBT_TRANSPORT transport, void* p_ref_data,
+@@ -301,6 +305,77 @@
                         tBTM_STATUS status) {
    l2c_link_sec_comp2(*p_bda, transport, p_ref_data, status);
  }
@@ -96,9 +90,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
  
  void l2c_link_sec_comp2(const RawAddress& p_bda,
                          UNUSED_ATTR tBT_TRANSPORT transport, void* p_ref_data,
-@@ -347,8 +422,13 @@
-   /* If we don't have one, maybe an SCO link. Send to MM */
-   if (!p_lcb) {
+@@ -391,6 +466,11 @@
      status = false;
    } else {
      p_lcb->SetDisconnectReason(reason);
@@ -107,14 +99,13 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
 +    // Revoke before CCB disconnect callbacks and possible LCB reuse.
 +    retrobox_retire_refs_for_lcb(p_lcb);
 +#endif
- 
-     /* Just in case app decides to try again in the callback context */
-     p_lcb->link_state = LST_DISCONNECTING;
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+     if (p_lcb->transport == BT_TRANSPORT_BR_EDR) {
+       const auto ticket = g_retrobox_acl_observer.Current(
 diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
 --- a/system/bt/stack/l2cap/l2c_csm.cc
 +++ b/system/bt/stack/l2cap/l2c_csm.cc
-@@ -33,7 +33,14 @@
- #include "l2cdefs.h"
+@@ -34,6 +34,13 @@
  #include "osi/include/log.h"
  #include "stack/btm/btm_sec.h"
  #include "stack/include/acl_api.h"
@@ -125,13 +116,13 @@ diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
 +                                              tBT_TRANSPORT transport,
 +                                              void* ref, tBTM_STATUS status);
 +#endif
- 
- /******************************************************************************/
- /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
-@@ -298,9 +305,22 @@
-           LOG_WARN("Unable to set link policy active");
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+ #include <cstdint>
+ extern uint64_t retrobox_acl_epoch_for_lcb(const tL2C_LCB* p_lcb);
+@@ -310,9 +317,22 @@
+                    p_ccb->p_rcb->psm, static_cast<unsigned long long>(epoch));
          }
-         p_ccb->chnl_state = CST_TERM_W4_SEC_COMP;
+ #endif
 -        auto status = btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
 -                                               p_ccb->p_rcb->psm, false,
 -                                               &l2c_link_sec_comp, p_ccb);
@@ -157,8 +148,7 @@ diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
 diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_utils.cc
 --- a/system/bt/stack/l2cap/l2c_utils.cc
 +++ b/system/bt/stack/l2cap/l2c_utils.cc
-@@ -42,7 +42,12 @@
- #include "stack/include/acl_api.h"
+@@ -43,6 +43,11 @@
  #include "stack/include/hci_error_code.h"
  
  tL2C_CCB* l2cu_get_next_channel_in_rr(tL2C_LCB* p_lcb); // TODO Move
@@ -167,12 +157,10 @@ diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_util
 +extern void retrobox_retire_refs_for_lcb(const tL2C_LCB* lcb);
 +extern void retrobox_retire_refs_for_ccb(const tL2C_CCB* ccb);
 +#endif
- 
- /*******************************************************************************
-  *
-@@ -146,8 +151,12 @@
-  * Returns          void
-  *
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+ extern void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb);
+ #endif
+@@ -151,6 +156,10 @@
   ******************************************************************************/
  void l2cu_release_lcb(tL2C_LCB* p_lcb) {
    tL2C_CCB* p_ccb;
@@ -180,11 +168,10 @@ diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_util
 +    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
 +  retrobox_retire_refs_for_lcb(p_lcb);
 +#endif
- 
-   p_lcb->in_use = false;
-   p_lcb->ResetBonding();
-@@ -1534,7 +1543,12 @@
-                     p_ccb->local_cid, p_ccb->in_use);
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+   // Source also releases LCBs without a dedicated HCI disconnect-complete.
+   retrobox_acl_retire_for_lcb(p_lcb);
+@@ -1542,6 +1551,11 @@
  
    /* If already released, could be race condition */
    if (!p_ccb->in_use) return;
