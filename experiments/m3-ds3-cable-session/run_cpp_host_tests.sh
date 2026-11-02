@@ -37,3 +37,6 @@ python3 "$HERE/test_h618_jni_candidate_cpp_patch.py"
 "$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic -pthread \
   "$HERE/test_candidate_uhid_fence.cc" -o "$OUT/check_candidate_fence"
 "$OUT/check_candidate_fence"
+"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic -pthread \
+  "$HERE/test_candidate_lifecycle_gate.cc" -o "$OUT/check_candidate_lifecycle"
+"$OUT/check_candidate_lifecycle"
