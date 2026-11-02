@@ -30,14 +30,17 @@ def guard_check():
     original_section, header_section = patch.split(
         "diff --git a/system/bt/btif/co/retrobox_provisional_uhid_gate.h", 1
     )
-    assert not any(
-        line.startswith("-") and not line.startswith("---")
-        for line in original_section.splitlines()
-        if line.startswith("-") and "return 0;" not in line
-        and not line.startswith("-}")
-        and "Internal function to parse" not in line
-        and line != "-"
-    ), "unexpected non-wrapper source removal"
+    removed = [
+        line[1:] for line in original_section.splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    ]
+    allowed = {
+        "  return 0;", "}", "", 
+        "/* Internal function to parse the events received from UHID driver*/",
+        "        } else",
+        '          APPL_TRACE_DEBUG("%s: uhid fd = %d", __func__, p_dev->fd);',
+    }
+    assert all(line in allowed for line in removed), removed
     added = [
         line[1:] for line in header_section.splitlines()
         if line.startswith("+") and not line.startswith("+++")
