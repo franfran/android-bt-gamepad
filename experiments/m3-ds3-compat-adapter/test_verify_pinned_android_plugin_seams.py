@@ -9,9 +9,10 @@ import verify_pinned_android_plugin_seams as source
 class PluginSourceGateTests(unittest.TestCase):
     def fixtures(self):
         return {
-            path: "\n".join(source.CHECKS[name][1]
-                            for name in source.CHECKS
-                            if source.CHECKS[name][0] == path)
+            path: "\n".join(fragment
+                            for name, (filepath, evidence) in source.CHECKS.items()
+                            if filepath == path
+                            for fragment in evidence)
             for path in source.FILES
         }
 
