@@ -1,3 +1,5 @@
+> **DEFERRED / HISTORICAL (Owner 2026-11-02).** The original recovered M3 kernel evidence below remains valid, but USB dongle feasibility and kernel/host inventory are **not current PR #52 tasks**. Return to it only in a separate future dongle PR after the plugin route's final determination. Current focus: [OEM plugin-only audit](M3-DS3-I1-PLUGIN-ONLY-ACCEPTANCE-AND-OEM-ABI-AUDIT.md).
+
 # I2 — M3 kernel configuration: dedicated USB Bluetooth dongle feasibility
 
 **Evidence:** Read-only analysis of the Owner's previously uploaded `m3-kernel.config(1).gz` (31,530 bytes compressed, 141,529 bytes text, 5,295 lines). This is **the M3 configuration upload**, not a public H618 BSP default defconfig and not a live module inventory.
