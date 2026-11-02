@@ -8,13 +8,19 @@ import verify_pinned_android_plugin_seams as source
 
 class PluginSourceGateTests(unittest.TestCase):
     def fixtures(self):
-        return {
+        texts = {
             path: "\n".join(fragment
                             for name, (filepath, evidence) in source.CHECKS.items()
                             if filepath == path
                             for fragment in evidence)
             for path in source.FILES
         }
+        manifest = "packages/apps/Bluetooth/AndroidManifest.xml"
+        texts[manifest] += "\n" + "\n".join(
+            '<service android:name=".' + name + '"></service>'
+            for name in source.M3_OBSERVED_BT_RESOLVER_SERVICES
+        )
+        return texts
 
     def test_ten_independent_source_predicates(self):
         check = source.check_texts(self.fixtures())
@@ -48,6 +54,27 @@ class PluginSourceGateTests(unittest.TestCase):
         t[p] = t[p].replace("!deviceProp.isBondingOrBonded()", "")
         with self.assertRaisesRegex(ValueError, "app_pin_binder_state_and_permission"):
             source.check_texts(t)
+
+    def test_actual_m3_service_resolver_coverage_all_22(self):
+        manifest = self.fixtures()["packages/apps/Bluetooth/AndroidManifest.xml"]
+        self.assertEqual(22, source.check_m3_resolver_public_manifest(manifest))
+
+    def test_unexpected_oem_service_is_not_credited(self):
+        manifest = self.fixtures()["packages/apps/Bluetooth/AndroidManifest.xml"]
+        manifest = manifest.replace(
+            '<service android:name=".hid.HidHostService"></service>', ""
+        )
+        with self.assertRaisesRegex(ValueError, "not covered"):
+            source.check_m3_resolver_public_manifest(manifest)
+
+    def test_receiver_component_does_not_count_as_service(self):
+        manifest = self.fixtures()["packages/apps/Bluetooth/AndroidManifest.xml"]
+        manifest = manifest.replace(
+            '<service android:name=".hid.HidHostService"></service>',
+            '<receiver android:name=".hid.HidHostService"></receiver>'
+        )
+        with self.assertRaisesRegex(ValueError, "not covered"):
+            source.check_m3_resolver_public_manifest(manifest)
 
     def test_git_blob_sha_algorithm(self):
         # Git SHA-1 of empty Git blob: Git's canonical historical fixed value.
