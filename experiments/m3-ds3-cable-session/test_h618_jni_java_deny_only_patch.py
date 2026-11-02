@@ -41,7 +41,8 @@ def main():
     assert "UHID_CREATE" not in patch
     assert "candidate.requestId, false)" in java
     assert "mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE)" in java
-    assert "mRetroboxServiceGeneration++" in java
+    assert java.count("mRetroboxServiceGeneration++;") == 3
+    assert java.count("mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE);") == 2
     assert all(not line.startswith("-") or line.startswith("---")
                for line in patch.splitlines())
 
