@@ -43,8 +43,18 @@ The script downloads five explicitly allowlisted public files over HTTPS via `ra
 - A security exception for unbonded DS3. The native auth trace is **observation only** and the JNI callback is **deny only**. The standalone UHID v3 patch **would block normal bonded HID if enabled** because there is no real standard-authentication classifier or `PermitStandard` source caller.
 - Any OTA update, SELinux change, module injection, live Bluetooth service restart, pairing session, or M3 runtime change. None was performed or authorized.
 
-## Next decision checkpoint
+## Next decision checkpoint — correction of PR #52 scope
 
-The next useful milestone is **PR #51 source acquisition / completeness / toolchain preflight**, not another UHID gate prototype. If the exact pinned checkout becomes available, run its existing `full_bsp_build_preflight.py` read-only, verify Android 12 API 31 ARM32 target and dependencies, then attempt a **separately reviewed offline build** and compare the generated ELF to the owner-original M3 ELF (Build ID `0d29a62178e43066e018216c1f1d5b18`, original SHA256 documented in PR #51). Source-level patch applicability in this document is a useful prerequisite, **not** deployment approval.
+**PR #52 does NOT require obtaining the full Android BSP as a prerequisite.** Its explicit purpose is to determine whether a removable plugin or independent compatibility daemon can enable DS3 wireless support **without replacing OEM `/system/lib/libbluetooth.so`**. Full BSP/Soong/ARM32 native library replacement is PR #51's **separate** source-first route, not the next PR #52 task.
+
+**Continue PR #52 in the following order:**
+
+1. **Architecture A / I1 — Actual extension surface:** inspect the pinned Fluoride/OEM Bluetooth stack for a supported plugin registration/loading interface, ownership handoff and versioned callback/ABI. Distinguish vendor HAL hooks from a Classic HID host plugin; do not assume an arbitrary `dlopen` or a debugger-injected .so is a supported extension.
+2. **Architecture B / I2 — Standalone daemon transport ownership:** determine whether a legitimate root/system service can obtain exclusive DS3 Classic HID L2CAP PSM 0x11/0x13 and HCI/controller access without conflicting with the already-running OEM Fluoride stack or weakening its security. If exclusive ownership is not available, reject this architecture rather than pretending UHID emulation fixes authentication. Identify whether Android platform APIs or OEM service features could delegate a connection.
+3. **Architecture D / I4 — Existing supported APIs/config:** inspect actual OEM API/configuration for per-device cable enrollment, genuine pairing/bond behavior, virtual-unplug handling and required privileges; reject MAC-only spoofed trust or a global low-security HID policy.
+4. **I3 — Input bridge only after real transport proof:** verify kernel `uinput` support and permissions vs confirmed UHID support, Android InputReader/RetroArch event recognition, and report/rumble lifecycle. A valid `UHID_CREATE` path is not a substitute for successful Bluetooth authentication.
+5. **I6 — Architecture decision:** publish a GO / CONDITIONAL / NO_GO table for A, B, D and fallback C, with exact evidence and the smallest safe offline PoC. **Only option C** (minimal source modification) or separately chosen PR #51 patched-library approach should trigger a full BSP build requirement.
+
+The three pinned-source patch applicability results above remain useful **architectural research/reference only**. They do not establish a plugin interface or a viable standalone daemon. Do not redirect PR #52 to recompiling `libbluetooth.so` merely because these source patches apply.
 
 **Cross-workstream boundaries:** PR #50 reverse engineering archive remains unmerged; PR #51 full source/build remains Draft; PR #52 authentication/Java/UHID source research stays Draft. Owner review required for merges or device-facing changes.
