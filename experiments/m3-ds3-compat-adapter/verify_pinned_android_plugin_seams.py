@@ -74,6 +74,49 @@ CHECKS = {
 }
 
 
+# Distinct Service Resolver components observed in the Owner's previously
+# collected M3 com.android.bluetooth package-manager snapshot. This is a
+# sanitized list of Android class names only; the private dump is NOT in git.
+# "Service Resolver" excludes registered receivers/providers/activities and
+# does NOT enumerate private services lacking an intent filter.
+M3_OBSERVED_BT_RESOLVER_SERVICES = (
+    "telephony.BluetoothInCallService",
+    "hfpclient.HeadsetClientService",
+    "hearingaid.HearingAidService",
+    "btservice.AdapterService",
+    "le_audio.LeAudioService",
+    "a2dpsink.A2dpSinkService",
+    "map.BluetoothMapService",
+    "pan.PanService",
+    "sap.SapService",
+    "pbapclient.PbapClientService",
+    "hfp.HeadsetService",
+    "hid.HidHostService",
+    "hid.HidDeviceService",
+    "hfpclient.connserv.HfpClientConnectionService",
+    "avrcpcontroller.AvrcpControllerService",
+    "a2dp.A2dpService",
+    "gatt.GattService",
+    "pbap.BluetoothPbapService",
+    "avrcp.AvrcpTargetService",
+    "mapclient.MapClientService",
+    "pbapclient.AuthenticationService",
+    "avrcpcontroller.BluetoothMediaBrowserService",
+)
+
+
+def check_m3_resolver_public_manifest(manifest_text):
+    # Parse ONLY explicit service entries, never receiver/provider names.
+    services = re.findall(
+        r'<service\\b[\\s\\S]*?android:name\\s*=\\s*["\\\']\\.([A-Za-z0-9_.]+)["\\\']',
+        manifest_text,
+    )
+    missing = sorted(set(M3_OBSERVED_BT_RESOLVER_SERVICES) - set(services))
+    if len(M3_OBSERVED_BT_RESOLVER_SERVICES) != 22 or missing:
+        raise ValueError("M3 resolver not covered by pinned public service manifest")
+    return len(M3_OBSERVED_BT_RESOLVER_SERVICES)
+
+
 def git_blob_sha(data):
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\x00" + data).hexdigest()
 
@@ -105,6 +148,7 @@ def main():
     try:
         texts = fetch_pinned()
         checks = check_texts(texts)
+        observed_count = check_m3_resolver_public_manifest(texts["packages/apps/Bluetooth/AndroidManifest.xml"])
     except Exception as e:
         print("NO_GO: pinned source audit could not verify: " + type(e).__name__)
         return 2
@@ -112,6 +156,7 @@ def main():
         "result": "PUBLIC_SOURCE_SEAMS_VERIFIED_NOT_OEM_PLUGIN_GO",
         "pinned_source": PIN,
         "git_blobs_verified": len(texts),
+        "m3_observed_resolver_services_matching_public_manifest": observed_count,
         "source_predicates_verified": checks,
         "scope": "public H618 Android 12, not OEM M3 proprietary ABI",
         "conclusion": "Narrow app pairing receiver possible in principle; no proven external HID/BTM/Java/UHID plugin ABI",
