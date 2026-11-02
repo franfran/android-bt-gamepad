@@ -13,3 +13,7 @@ CXX=${CXX:-g++}
   "$HERE/session_descriptor_envelope.cc" \
   "$HERE/test_private_descriptor_transport.cc" -o "$OUT/check_transport"
 "$OUT/check_transport"
+"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic \
+  "$HERE/session_descriptor_envelope.cc" \
+  "$HERE/test_private_descriptor_wire.cc" -o "$OUT/check_wire"
+"$OUT/check_wire"
