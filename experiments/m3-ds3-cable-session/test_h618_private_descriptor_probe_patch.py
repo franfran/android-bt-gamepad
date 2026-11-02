@@ -20,7 +20,9 @@ bta = patch.split("diff --git a/system/bt/bta/hh/bta_hh_act.cc", 1)[1].split(
     "diff --git a/system/bt/btif/src/btif_hh.cc", 1)[0]
 assert "!p_cb->is_le_device" in bta
 assert "btif_hh_ds3_probe_descriptor(" in bta
-assert "(*bta_hh_cb.p_cback)(BTA_HH_GET_DSCP_EVT" in bta
+assert "if (p_cb->is_le_device) {" in bta
+assert "bta_hh_le_get_dscp_act(p_cb);" in bta
+assert not any(line.startswith("-") and not line.startswith("---") for line in bta.splitlines())
 assert "BTA_SEC_AUTHENTICATE" not in patch
 assert "BOND_BONDED" not in patch
 assert "UHID_CREATE" not in patch
