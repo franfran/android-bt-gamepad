@@ -159,7 +159,7 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
      // This method does not check for error conditon (newState == prevState)
      private void broadcastConnectionState(BluetoothDevice device, int newState) {
          Integer prevStateInteger = mInputDevices.get(device);
-@@ -977,5 +1026,9 @@
+@@ -977,4 +1026,8 @@
      private native boolean setIdleTimeNative(byte[] btAddress, byte idleTime);
  
      private native boolean getIdleTimeNative(byte[] btAddress);
@@ -168,4 +168,3 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
 +    private native boolean retroboxAdmissionDecisionNative(
 +            int handle, long aclEpoch, long requestId, boolean approve);
  }
- 
