@@ -24,6 +24,4 @@ CXX=${CXX:-g++}
 python3 "$HERE/test_h618_checked_bytes_patch.py"
 python3 "$HERE/test_h618_private_descriptor_probe_patch.py"
 python3 "$HERE/test_h618_btm_auth_observe_patch.py"
-"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic \
-  "$HERE/test_acl_epoch_observer.cc" -o "$OUT/check_acl_epoch"
-"$OUT/check_acl_epoch"
+python3 "$HERE/verify_h618_acl_epoch_observer.py"
