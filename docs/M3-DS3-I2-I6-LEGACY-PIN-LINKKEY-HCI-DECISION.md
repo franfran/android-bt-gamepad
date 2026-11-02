@@ -30,7 +30,7 @@ Compile flag: **RETROBOX_DS3_LEGACY_AUTH_TRACE** (unset). Changes ONLY stack/btm
 
 No existing security statements are removed; no PIN value, LinkKey bytes, Bluetooth address, HCI packet contents, or fake success is introduced. Raw Android stock logging may still include private identifiers: never commit unredacted captures.
 
-The final ten source hunks were independently checked against the exact pinned H618 GitHub source with old/new counts and cumulative offsets. Full Android BSP git apply --check, native ARM32 compilation and real device logging have NOT been performed.
+The final ten source hunks were independently checked against the exact pinned H618 GitHub source with old/new counts and cumulative offsets. A real **scratch-tree `git apply --check`** against Git-blob-verified pinned H618 source has now **PASSED** in [CI run 41456280613](https://github.com/franfran/android-bt-gamepad/actions/runs/41456280613). A full Android BSP checkout, native ARM32 compilation and real device logging have NOT been performed.
 
 ## Offline analyzer
 
