@@ -10,9 +10,11 @@ int main() {
   RequestRefPool p;
   void* old=p.Begin(base);
   check(old!=nullptr);
+  check(p.PendingIdentity(old).has_value());
   check(p.OnCallback(old,base,SecurityEvent::kDelay).forward);
   check(p.OnCallback(old,base,SecurityEvent::kSuccess).forward);
   check(!p.OnCallback(old,base,SecurityEvent::kSuccess).forward);
+  check(!p.PendingIdentity(old));
   auto next=base;next.epoch=2;
   void* newer=p.Begin(next);
   check(newer!=old);
@@ -43,6 +45,7 @@ int main() {
   invalid=base;invalid.ccb=0;
   check(p.Begin(invalid)==nullptr);
   check(!p.OnCallback(nullptr,base,SecurityEvent::kSuccess).forward);
+  check(!p.PendingIdentity(nullptr));
   int dummy=0;
   check(!p.OnCallback(&dummy,base,SecurityEvent::kSuccess).forward);
   RequestRefPool many;
