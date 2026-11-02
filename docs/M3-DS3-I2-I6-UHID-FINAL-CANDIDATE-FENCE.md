@@ -1,3 +1,5 @@
+> **SUPERSEDED / NOT SAFE TO DEPLOY (v1):** This original research fence has a check-then-write TOCTOU window and `Revoke` unblocks fd before verified close. Do not enable or apply it for admission. See [v2 quarantine / atomic writer](M3-DS3-I2-I6-UHID-LIFECYCLE-V2-QUARANTINE.md). The prior host tests do not prove a safe runtime gate.
+
 # I2/I6 — H618 UHID_CREATE / UHID_INPUT candidate fence (default OFF)
 
 **PR:** #52, branch \`research/m3-ds3-compat-adapter\`. **Source pin:** \`BPI-SINOVOIP/BPI-H618-Android12@250eabfc529518b7f26432663ed0a867ab2f625d\`. **Deployment:** NO_GO. No M3 operation, no modified Bluetooth security requirements, no new bond or working DS3 radio session.
