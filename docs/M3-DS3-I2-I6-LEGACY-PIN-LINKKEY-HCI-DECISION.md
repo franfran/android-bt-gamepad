@@ -1,3 +1,5 @@
+> **EVIDENCE CLARIFICATION (2026-11-02):** Four direct [HCI capture windows](M3-DS3-I2-UPLOADED-HCI-FOUR-ATTEMPTS.md) now establish *within each captured session* the sequence PIN Code Request → **no observed host HCI PIN reply command** → Authentication Complete **0x22 / LMP Response Timeout** after ~30.06 s. The later Oct 31 `onPair:null` Java log is **not synchronized to those sessions**. Treat `0x22` as **a status carried by Authentication Complete**, not an HCI `0x05` Authentication Failure code. [Full plugin-only classification](M3-DS3-I2-HCI-0X22-BLUEZ-CABLE-PAIRING-VS-PLUGIN.md) distinguishes public `setPin(byte[])` first-gate capability from BlueZ cable pairing and M3 unproven OEM plugin ABI. The old generic PIN-helper investigation remains historical; do not restart disabled native instrumentation or BSP work as PR #52's next step.
+
 # I2/I6 — DS3 legacy Bluetooth: LinkKey, PIN and HCI authentication decision
 
 **PR:** #52, research/m3-ds3-compat-adapter (Draft). **Pinned reference:** BPI-SINOVOIP/BPI-H618-Android12 @ 250eabfc529518b7f26432663ed0a867ab2f625d. **Device deployment:** NO_GO. PR #50 and #51 remain independent.
