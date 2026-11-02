@@ -23,3 +23,4 @@ CXX=${CXX:-g++}
 "$OUT/check_checked"
 python3 "$HERE/test_h618_checked_bytes_patch.py"
 python3 "$HERE/test_h618_private_descriptor_probe_patch.py"
+python3 "$HERE/test_h618_btm_auth_observe_patch.py"
