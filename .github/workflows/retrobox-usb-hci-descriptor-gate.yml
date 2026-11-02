@@ -1,18 +1,8 @@
 name: RetroBox DS3 Userspace USB HCI Descriptor Gate (Host Only)
 
+# DEFERRED by Owner (2026-11-02): USB dongle testing belongs in a future PR.
+# Retain host-only test provenance; never run automatically on plugin-only PR #52.
 on:
-  push:
-    branches:
-      - research/m3-ds3-compat-adapter
-    paths:
-      - "experiments/m3-ds3-compat-adapter/usb_hci_descriptor_gate.py"
-      - "experiments/m3-ds3-compat-adapter/test_usb_hci_descriptor_gate.py"
-      - ".github/workflows/retrobox-usb-hci-descriptor-gate.yml"
-  pull_request:
-    paths:
-      - "experiments/m3-ds3-compat-adapter/usb_hci_descriptor_gate.py"
-      - "experiments/m3-ds3-compat-adapter/test_usb_hci_descriptor_gate.py"
-      - ".github/workflows/retrobox-usb-hci-descriptor-gate.yml"
   workflow_dispatch:
 
 permissions:
