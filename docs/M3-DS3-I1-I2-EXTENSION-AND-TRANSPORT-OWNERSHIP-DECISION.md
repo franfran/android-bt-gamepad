@@ -74,3 +74,17 @@ Evidence grade: **PROVEN** = exact pinned public source logic or historical M3 o
 ## Source inspection boundary / reproducibility
 
 Inspected pinned public source paths: `btif/src/bluetooth.cc`, `btif/src/btif_hh.cc`, `btif/src/btif_sock.cc`, `btif/src/btif_sock_l2cap.cc`, `btif/src/stack_manager.cc`, `btcore/{include/module.h,src/module.cc}`, `stack/{hid/hidh_conn.cc,l2cap/l2c_api.cc,gap/gap_conn.cc}`, `bta/jv/{bta_jv_act.cc,bta_jv_api.cc}`, `hci/src/hci_layer.cc`, `gd/hal/hci_hal_android_hidl.cc`, `main/Android.bp`, `packages/apps/Bluetooth/{jni/com_android_bluetooth_hid_host.cpp,src/com/android/bluetooth/hid/HidHostService.java}`, and `frameworks/base/core/java/android/bluetooth/{BluetoothDevice.java,BluetoothSocket.java,BluetoothAdapter.java,BluetoothHidHost.java}`. Public-source inspection only, no full OEM image verification or tree-wide content grep; an unknown OEM proprietary extension remains untested. Prior PR #52 host mocks and [git-apply CI 41456280613](https://github.com/franfran/android-bt-gamepad/actions/runs/41456280613) remain valid **research**, not adapter evidence.
+
+### Executed ownership gate (GitHub Actions, not M3)
+
+Committed [pinned source gate](../experiments/m3-ds3-compat-adapter/verify_transport_ownership.py) and [read-only workflow](../.github/workflows/retrobox-ds3-ownership-gate.yml). [Run 41460068497](https://github.com/franfran/android-bt-gamepad/actions/runs/41460068497) completed **SUCCESS** on the PR #52 branch at head `b3c0700fe4f3a41bf4dcb494fd652b4fc51252d3`. Decoded job log records **`PASS: 9 pinned Git blobs, 10 source assertions`**, then correctly warns no safe second owner and no runtime/ABI/plugin claim. It fetched exact allowlisted immutable H618 files, independently checked each Git blob SHA-1 and matched 10 named source-contract assertions. The CI test does **not** examine the proprietary OEM binary, exercise Bluetooth sockets, demonstrate the correctness of a security workaround or establish all-source exhaustive absence of an extension.
+
+Reproduce without a BSP:
+
+```bash
+python3 experiments/m3-ds3-compat-adapter/verify_transport_ownership.py
+# Or against just the exact system/bt source tree:
+python3 experiments/m3-ds3-compat-adapter/verify_transport_ownership.py --source-root /path/to/system/bt
+```
+
+The optional local-tree mode requires all nine exact pinned source blobs, **not** any full Android build environment. It fails closed on changed/missing source and never writes source files.
