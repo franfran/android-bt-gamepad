@@ -60,7 +60,6 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
            APPL_TRACE_DEBUG("%s: uhid fd = %d", __func__, p_dev->fd);
        }
  
-       p_dev->hh_keep_polling = 1;
 +#if defined(RETROBOX_DS3_UHID_PROVISIONAL_V3_RESEARCH)
 +      // Register every newly opened fd before starting the poll thread.
 +      // No peer classification or Native security verdict exists at this point.
@@ -72,6 +71,7 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
 +        return;
 +      }
 +#endif
+       p_dev->hh_keep_polling = 1;
        p_dev->hh_poll_thread_id =
            create_thread(btif_hh_poll_event_thread, p_dev);
        break;
@@ -79,7 +79,6 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
            return;
          } else {
            APPL_TRACE_DEBUG("%s: uhid fd = %d", __func__, p_dev->fd);
-           p_dev->hh_keep_polling = 1;
 +#if defined(RETROBOX_DS3_UHID_PROVISIONAL_V3_RESEARCH)
 +          if (!g_provisional_uhid.Open(p_dev->fd, dev_handle)) {
 +            APPL_TRACE_ERROR("RetroBox provisional UHID registration failed");
@@ -96,6 +95,7 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
 +            return;
 +          }
 +#endif
+           p_dev->hh_keep_polling = 1;
            p_dev->hh_poll_thread_id =
                create_thread(btif_hh_poll_event_thread, p_dev);
          }
