@@ -1,0 +1,47 @@
+# P1/P2 — Direct M3 service / process / HCI HAL plugin-entrypoint coverage
+
+**2026-11-02 — Draft PR #52. Owner scope: plugin-only on EXISTING onboard M3 radio.** This is an offline comparison of previously uploaded *actual M3* package/process/property snapshots with immutable pinned H618 public source. It is **NOT** a raw OEM ELF/APK/HAL binary disassembly. Proprietary binaries, full package dumps, real addresses and raw logs stay private. No M3 operations.
+
+## Observed M3 source inventory (historical owner-controlled snapshots)
+
+| Evidence source, archived privately | Confirmed *specific* M3 observation | What it does NOT show |
+| --- | --- | --- |
+| `m3-bluetooth-package.txt`, package-manager `dumpsys package com.android.bluetooth` | `com.android.bluetooth` is a system Bluetooth package with `sharedUser android.uid.bluetooth/1002`. Actual Service Resolver Table has `android.bluetooth.IBluetooth` -> `.btservice.AdapterService`, `android.bluetooth.IBluetoothHidHost` -> `.hid.HidHostService`, `android.bluetooth.IBluetoothHidDevice` -> `.hid.HidDeviceService`, plus other ordinary profile services | A service name alone is not a third-party registration/authorization contract; excludes unexported services without resolvable intent filters and private Binder registration |
+| Same dump **22 distinct Bluetooth app Service Resolver component classes** | The **entire observed set of 22** has a matching `<service android:name=".class">` in **immutable public H618 AndroidManifest.xml** ([pinned source](https://github.com/BPI-SINOVOIP/BPI-H618-Android12/blob/250eabfc529518b7f26432663ed0a867ab2f625d/packages/apps/Bluetooth/AndroidManifest.xml)); **22/22 matched, 0 unmatched** | This is a **bounded negative** for *newly exposed service names in this snapshot*, **not** proof that Java DEX methods are byte-identical or that hidden/no-intent Binder/private native loader cannot exist. Receivers, activities and providers intentionally excluded from the counted set |
+| `m3-tv-settings-package.txt`, package-manager snapshot | Separate `com.android.tv.settings/.bluetooth.BluetoothPairingRequest` **Receiver** and `.bluetooth.BluetoothPairingDialog` **Activity** resolve `ACTION_PAIRING_REQUEST`; TV Settings is **SYSTEM/PRIVILEGED/SYSTEM_EXT** and grants `BLUETOOTH_PRIVILEGED`, `BLUETOOTH_CONNECT` | A privilege held by an OEM system app is **not** available to an arbitrary aftermarket APK. Doesn't prove a third-party broadcast receiver can intercept before original receiver or complete DS3 cable-pairing semantics |
+| `d2b-2d-b-linker-preflight.txt`, target Bluetooth process read-only snapshot | `com.android.bluetooth` native process, Bluetooth UID 1002, ARM32, 48 threads; `/system/lib/libbluetooth.so`, Bionic `libdl.so`, Android runtime `linker` mapped. Dynamic system linker config `/linkerconfig/ld.config.txt` present. Process alive after inspection | `libdl.so` being mapped and a process having a linker **does not prove a loader that accepts a companion plugin**, allow a namespace path, grant callback ABI, or allow a live-safe injection. Prior S7 isolated loading is not a supported OEM plugin |
+| `m3-adb-properties.txt`, original device property snapshot | Active `init.svc.vendor.bluetooth-1-0=running`, with a separate service PID at observation time; independent of Bluetooth app process (process PID in a different snapshot is not assumed synchronized). Bluetooth controller HAL resides in its own service process | Does not imply the HAL multiplexes clients; it does not itself expose an OEM HID Host plugin interface |
+| `docs/STATUS.md` previous experimental evidence | M3 runs AIC controller through vendor HIDL Bluetooth HAL/UART; no usable `hci0`; original addon had `addon.mapped=false` in target. `libbluetooth_jni.so` and `libbluetooth.so` mapped | Does not show secondary HCI ownership or successful plugin load |
+
+**Proven current evidence increment:** A *specific* proposed mechanism — **an additional manifest-declared, intent-resolvable third-party HID Host extension inside the existing installed Bluetooth APK** — has **no observed OEM-specific service component in this dump**. It is **NO_GO as a positive finding**: no such component/contract was discovered. Do not escalate this to absence of every conceivable compiled OEM loader.
+
+### Reproducible comparison, no device and no proprietary bytes in CI
+
+- [Public pinned Android plugin seam verifier](../experiments/m3-ds3-compat-adapter/verify_pinned_android_plugin_seams.py) keeps an **allowlist of exactly the 22 observed M3 Service Resolver class names** (sanitized names only, no raw package text). Fetches 10 immutable public H618 Git blobs, verifies their Git hashes and source predicates, and checks all 22 observed OEM resolver classes against actual **`<service>` tags**, rather than accidentally counting receivers/providers.
+- [Synthetic regression tests](../experiments/m3-ds3-compat-adapter/test_verify_pinned_android_plugin_seams.py) include negative cases where a missing `HidHostService` tag or a same-named `<receiver>` must **not** count as a matching service.
+- **[Actual CI run 41482904266](https://github.com/franfran/android-bt-gamepad/actions/runs/41482904266): SUCCESS** on commit `72296ad7`. Decoded job log: **11 tests / OK; 10 public Git blobs verified; `m3_observed_resolver_services_matching_public_manifest = 22`**. Tests use synthetic strings; the *original installed service list* came from the archived owner M3 dump, not from a newly fetched device. Earlier intermediate CI failures during verifier development were corrected; only this final pass validates the complete checker. **Not** an OEM loader scan.
+
+## HIDL transport: why a vendor service is not a DS3 security plugin
+
+Pinned public Android HAL source:
+- [`IBluetoothHci.hal`](https://github.com/BPI-SINOVOIP/BPI-H618-Android12/blob/250eabfc529518b7f26432663ed0a867ab2f625d/hardware/interfaces/bluetooth/1.0/IBluetoothHci.hal) exposes `initialize(IBluetoothHciCallbacks callback)`, `sendHciCommand`, `sendAclData`, `sendScoData`, `close`; it does **not** declare a per-profile `registerHidPlugin` or `registerPairingPolicyCallback`.
+- [`IBluetoothHciCallbacks.hal`](https://github.com/BPI-SINOVOIP/BPI-H618-Android12/blob/250eabfc529518b7f26432663ed0a867ab2f625d/hardware/interfaces/bluetooth/1.0/IBluetoothHciCallbacks.hal) provides transport events `hciEventReceived`, `aclDataReceived`, `scoDataReceived` to the initialized client.
+- [`hci_layer_android.cc:158–190`](https://github.com/BPI-SINOVOIP/BPI-H618-Android12/blob/250eabfc529518b7f26432663ed0a867ab2f625d/system/bt/hci/src/hci_layer_android.cc#L158-L190) initializes its owned callback object. **No supported multi-client HCI arbiter/delegation is demonstrated.** A second independent client may disrupt the current stack's radio ownership, so HIDL existence is not permission for a plugin/second HCI client trial.
+- More importantly, a transport-level command path is *below* BTM Classic security, HID L2CAP policy, Java `BOND_BONDED` and UHID SET_REPORT. Merely reaching HAL cannot satisfy the complete DS3 plugin contract. Private OEM vendor HAL *implementation* not byte-audited.
+
+## Closed versus open feasibility gates
+
+| Candidate / evidence boundary | Result and reason |
+| --- | --- |
+| An M3-only new, **intent-resolvable** service name added to the installed Bluetooth APK | **No match found** among the 22 resolved service components: **22/22 map to ordinary pinned public manifest services**. **Bounded negative**, not complete no-extension proof |
+| TV Settings pairing receiver as **normal third-party plugin ABI** | **NO**. M3 OEM receiver is PRIVILEGED and is an ordinary pairing request handler, not a documented extension to Bluetooth HID/BTM |
+| Public `BLUETOOTH_CONNECT` + `setPin(byte[])` | **CONDITIONAL first-gate only**. Four prior HCI windows show missing reply command then status `0x22`; still no correct DS3 PIN/cable protocol or later-gate authority |
+| Bluetooth HAL HIDL service as a *safe extra HCI consumer* | **NO supported broker or arbitration shown**. Do not call `initialize` while OEM stack runs; no M3 HAL test is approved |
+| Generic public Java ProfileService / JNI / HID Host module as a full add-on | **NO_GO for inspected public extension points**: internal known classes, privileged Binder connect, callback single owner, authenticate+encrypt PSMs |
+| **Exact proprietary OEM loader in real `libbluetooth.so`/JNI/vendor HAL/APK** | **UNRESOLVED**. Owner archived original hashes and Library file records exist, but raw ELF/APK bytes still cannot be copied in this session for actual imports/callsites/disassembly. No universal impossibility claim |
+
+## Next strictly P1/P2 technical evidence required
+
+For exact OEM custom plugin GO, require **actual** original `libbluetooth.so`/JNI/vendor HAL/APK callsite proof of: (a) externally installable module name + load/registration, (b) versioned callback/IPC contract reachable while stock stack runs, (c) secure per-DS3 authority over radio authentication and fixed HID PSM 0x11/0x13, (d) legitimate Java bond/policy admission, (e) functional UHID SET_REPORT lifecycle, (f) non-interfering teardown/recovery. A loader, exported service or private Binder call **without** all those properties cannot earn plugin GO.
+
+**No additional mobile/TV box operations**, no root injection, no restart, no system library changes, no dongle, no full BSP. PR #52 stays Draft; #50/#51 remain separate.
