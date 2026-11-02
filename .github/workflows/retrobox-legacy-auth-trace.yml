@@ -7,6 +7,8 @@ on:
       - "experiments/m3-ds3-cable-session/test_analyze_legacy_auth_trace.py"
       - "experiments/m3-ds3-cable-session/verify_h618_legacy_auth_trace_patch.py"
       - "experiments/m3-ds3-cable-session/h618_legacy_auth_decision_trace_disabled.patch"
+      - "experiments/m3-ds3-compat-adapter/classify_sanitized_hci_timeout.py"
+      - "experiments/m3-ds3-compat-adapter/test_classify_sanitized_hci_timeout.py"
       - ".github/workflows/retrobox-legacy-auth-trace.yml"
   push:
     branches: ["research/m3-ds3-compat-adapter"]
@@ -15,6 +17,8 @@ on:
       - "experiments/m3-ds3-cable-session/test_analyze_legacy_auth_trace.py"
       - "experiments/m3-ds3-cable-session/verify_h618_legacy_auth_trace_patch.py"
       - "experiments/m3-ds3-cable-session/h618_legacy_auth_decision_trace_disabled.patch"
+      - "experiments/m3-ds3-compat-adapter/classify_sanitized_hci_timeout.py"
+      - "experiments/m3-ds3-compat-adapter/test_classify_sanitized_hci_timeout.py"
       - ".github/workflows/retrobox-legacy-auth-trace.yml"
 
 permissions:
@@ -31,3 +35,9 @@ jobs:
           persist-credentials: false
       - name: Validate dormant observer and synthetic-only cases
         run: python3 experiments/m3-ds3-cable-session/verify_h618_legacy_auth_trace_patch.py
+
+      - name: Distinguish 0x22 LMP timeout and 0x05 auth failure (synthetic only)
+        run: |
+          python3 -m unittest discover \
+            -s experiments/m3-ds3-compat-adapter \
+            -p test_classify_sanitized_hci_timeout.py -v
