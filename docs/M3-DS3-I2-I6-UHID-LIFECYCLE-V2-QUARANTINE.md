@@ -1,3 +1,5 @@
+> **RESEARCH SUPERSEDED (v2):** v2 fixes check-then-write/early revoke but still allows UNKNOWN fds onto the stock UHID path. New [v3 provisional-before-classification research](M3-DS3-I2-I6-UHID-PROVISIONAL-V3-BEFORE-CLASSIFICATION.md) denies UNKNOWN, but **also remains NO_GO** until trustworthy standard-HID proof and fd close integration exist. Do not apply or enable v1/v2/v3 together.
+
 # I2/I6 — UHID Candidate Lifecycle v2: Atomic Write + Quarantine
 
 **Workstream:** Draft PR #52 (`research/m3-ds3-compat-adapter`). **Pinned reference:** `BPI-SINOVOIP/BPI-H618-Android12@250eabfc529518b7f26432663ed0a867ab2f625d`. **Status:** offline prototype / device NO_GO.
