@@ -34,3 +34,6 @@ python3 "$HERE/test_h618_request_bound_callback_patch.py"
   "$HERE/test_java_admission_bridge.cc" -o "$OUT/check_java_admission"
 "$OUT/check_java_admission"
 python3 "$HERE/test_h618_jni_candidate_cpp_patch.py"
+"$CXX" -std=c++17 -Wall -Wextra -Werror -pedantic -pthread \
+  "$HERE/test_candidate_uhid_fence.cc" -o "$OUT/check_candidate_fence"
+"$OUT/check_candidate_fence"
