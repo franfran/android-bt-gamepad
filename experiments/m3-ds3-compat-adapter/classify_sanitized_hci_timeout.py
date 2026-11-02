@@ -52,9 +52,13 @@ def classify(session):
     pins = [x for x in seq if x["kind"] == "pin_code_request"]
     completions = [x for x in seq if x["kind"] == "authentication_complete"]
     replies = [x for x in seq if x["kind"] in ("pin_code_reply", "pin_code_negative_reply")]
-    if len(pins) != 1 or len(completions) != 1 or len(replies) > 1:
+    if (len(pins) != 1 or len(completions) != 1 or len(replies) > 1 or
+            sum(x["kind"] == "connection_complete" for x in seq) != 1 or
+            sum(x["kind"] == "authentication_requested" for x in seq) != 1):
         classification = "AMBIGUOUS_HCI_WINDOW"
-    elif completions[0]["elapsed_ms"] <= pins[0]["elapsed_ms"]:
+    elif (completions[0]["elapsed_ms"] <= pins[0]["elapsed_ms"] or
+          any(x["elapsed_ms"] < pins[0]["elapsed_ms"] or
+              x["elapsed_ms"] >= completions[0]["elapsed_ms"] for x in replies)):
         classification = "AMBIGUOUS_HCI_WINDOW"
     elif not session["capture_complete"]:
         classification = "INCOMPLETE_CAPTURE_NO_ABSENCE_CLAIM"
