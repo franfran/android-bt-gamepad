@@ -161,7 +161,7 @@ def main():
         result = audit(args.original_oem_elf, args.expected_sha256)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
         # Do not print untrusted device strings, paths or stderr from tools.
-        print("NO_GO: " + type(exc).__name__ + ": " + str(exc)[:140], file=sys.stderr)
+        print("NO_GO: " + type(exc).__name__ + " (path and private file content withheld)", file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True, indent=2))
     return 0
