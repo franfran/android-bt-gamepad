@@ -1,0 +1,133 @@
+diff --git a/system/bt/stack/btm/btm_sec.cc b/system/bt/stack/btm/btm_sec.cc
+--- a/system/bt/stack/btm/btm_sec.cc
++++ b/system/bt/stack/btm/btm_sec.cc
+@@ -615,7 +615,12 @@
+                       uint8_t* p_pin) {
+   tBTM_SEC_DEV_REC* p_dev_rec;
+ 
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  BTM_TRACE_EVENT("RB_AUTH ui_pin_reply accepted=%d state=%u",
++                  res == BTM_SUCCESS,
++                  static_cast<unsigned>(btm_cb.pairing_state));
++#endif
+   BTM_TRACE_API(
+       "BTM_PINCodeReply(): PairState: %s   PairFlags: 0x%02x  PinLen:%d  "
+       "Result:%d",
+       btm_pair_state_descr(btm_cb.pairing_state), btm_cb.pairing_flags, pin_len,
+@@ -3044,7 +3049,16 @@
+   tBTM_PAIRING_STATE old_state = btm_cb.pairing_state;
+   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
+   bool are_bonding = false;
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  // Raw HCI completion; no link keys, controller addresses or PIN bytes.
++  BTM_TRACE_EVENT("RB_AUTH hci_completion status=0x%02x sec_state=%u "
++                  "dev_record=%d pair_state=%u",
++                  static_cast<unsigned>(status),
++                  p_dev_rec ? static_cast<unsigned>(p_dev_rec->sec_state) : 0U,
++                  p_dev_rec != nullptr,
++                  static_cast<unsigned>(btm_cb.pairing_state));
++#endif
+   bool was_authenticating = false;
+ 
+   if (p_dev_rec) {
+     VLOG(2) << __func__ << ": Security Manager: in state: "
+@@ -3824,7 +3838,11 @@
+   if (key_type != BTM_LKEY_TYPE_CHANGED_COMB)
+     p_dev_rec->link_key_type = key_type;
+ 
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  BTM_TRACE_EVENT("RB_AUTH key_notification type=%u",
++                  static_cast<unsigned>(key_type));
++#endif
+   p_dev_rec->sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
+ 
+   /*
+    * Until this point in time, we do not know if MITM was enabled, hence we
+@@ -3939,7 +3957,12 @@
+     btsnd_hcic_link_key_neg_reply(bda);
+     return;
+   }
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  BTM_TRACE_EVENT("RB_AUTH key_request known=%d state=%u",
++                  !!(p_dev_rec->sec_flags & BTM_SEC_LINK_KEY_KNOWN),
++                  static_cast<unsigned>(btm_cb.pairing_state));
++#endif
+   if (p_dev_rec->sec_flags & BTM_SEC_LINK_KEY_KNOWN) {
+     btsnd_hcic_link_key_req_reply(bda, p_dev_rec->link_key);
+     return;
+   }
+@@ -4077,7 +4100,15 @@
+ 
+   /* Tell L2CAP that there was a PIN code request,  */
+   /* it may need to stretch timeouts                */
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  BTM_TRACE_EVENT("RB_AUTH pin_request state=%u disabled=%d preset=%d "
++                  "fixed=%d callback=%d",
++                  static_cast<unsigned>(p_cb->pairing_state),
++                  p_cb->pairing_disabled, p_cb->pin_code_len != 0,
++                  p_cb->cfg.pin_type == HCI_PIN_TYPE_FIXED,
++                  p_cb->api.p_pin_callback != nullptr);
++#endif
+   l2c_pin_code_request(p_bda);
+ 
+   VLOG(2) << __func__ << " BDA: " << p_bda
+           << " state: " << btm_pair_state_descr(btm_cb.pairing_state);
+@@ -4114,7 +4145,10 @@
+   }
+ 
+   if (!p_cb->pairing_disabled && (p_cb->cfg.pin_type == HCI_PIN_TYPE_FIXED)) {
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++    BTM_TRACE_EVENT("RB_AUTH pin_route=fixed");
++#endif
+     BTM_TRACE_EVENT("btm_sec_pin_code_request fixed pin replying");
+     btm_sec_change_pairing_state(BTM_PAIR_STATE_WAIT_AUTH_COMPLETE);
+     btsnd_hcic_pin_code_req_reply(p_bda, p_cb->cfg.pin_code_len,
+                                   p_cb->cfg.pin_code);
+@@ -4129,7 +4163,10 @@
+ 
+   /* We could have started connection after asking user for the PIN code */
+   if (btm_cb.pin_code_len != 0) {
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++    BTM_TRACE_EVENT("RB_AUTH pin_route=preset");
++#endif
+     BTM_TRACE_EVENT("btm_sec_pin_code_request bonding sending reply");
+     btsnd_hcic_pin_code_req_reply(p_bda, btm_cb.pin_code_len, p_cb->pin_code);
+ 
+     /* Mark that we forwarded received from the user PIN code */
+@@ -4179,7 +4216,10 @@
+     /* Also cannot send remote name request while paging, i.e. connection is not
+      * completed */
+     if (p_dev_rec->sec_flags & BTM_SEC_NAME_KNOWN) {
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++      BTM_TRACE_EVENT("RB_AUTH pin_route=ui_callback");
++#endif
+       BTM_TRACE_EVENT("btm_sec_pin_code_request going for callback");
+ 
+       btm_cb.pairing_flags |= BTM_PAIR_FLAGS_PIN_REQD;
+       if (p_cb->api.p_pin_callback) {
+@@ -4189,7 +4229,10 @@
+              BTM_SEC_IN_MIN_16_DIGIT_PIN));
+       }
+     } else {
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++      BTM_TRACE_EVENT("RB_AUTH pin_route=name_pending");
++#endif
+       BTM_TRACE_EVENT("btm_sec_pin_code_request going for remote name");
+ 
+       /* We received PIN code request for the device with unknown name */
+       /* it is not user friendly just to ask for the PIN without name */
+diff --git a/system/bt/btif/src/btif_dm.cc b/system/bt/btif/src/btif_dm.cc
+--- a/system/bt/btif/src/btif_dm.cc
++++ b/system/bt/btif/src/btif_dm.cc
+@@ -764,7 +764,11 @@
+       }
+     }
+   }
++#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
++  BTIF_TRACE_EVENT("RB_AUTH java_pin_ui_dispatch local_started=%d min16=%d",
++                   pairing_cb.is_local_initiated, p_pin_req->min_16_digit);
++#endif
+   invoke_pin_request_cb(bd_addr, bd_name, cod, p_pin_req->min_16_digit);
+ }
+ 
+ /*******************************************************************************
