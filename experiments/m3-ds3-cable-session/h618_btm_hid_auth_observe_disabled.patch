@@ -31,7 +31,6 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
      p_next_ccb = p_ccb->p_next_ccb;
  
      if (p_ccb == p_ref_data) {
-       switch (status) {
 +#if defined(RETROBOX_DS3_BTM_AUTH_OBSERVE)
 +      // Only observe the matching live CCB, never dereference a stale ref.
 +      // No peer address or HID input bytes are logged.
@@ -42,6 +41,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
 +                 p_ccb->p_rcb->psm, static_cast<int>(status));
 +      }
 +#endif
+       switch (status) {
          case BTM_SUCCESS:
            l2c_csm_execute(p_ccb, L2CEVT_SEC_COMP, &ci);
            break;
