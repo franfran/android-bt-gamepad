@@ -1,3 +1,5 @@
+> **DEFERRED — OUT OF SCOPE FOR PR #52 (Owner decision 2026-11-02).** This document and associated tests/CI are preserved *historical research only*. Do **not** continue any dongle, libusb, BTstack, kernel USB or second-radio work on PR #52. A dongle approach may be investigated in a separately authorized future PR **only after the M3 existing-radio plugin route has been properly falsified**. Active work is [OEM plugin-only audit](M3-DS3-I1-PLUGIN-ONLY-ACCEPTANCE-AND-OEM-ABI-AUDIT.md).
+
 # PR #52 I2 — M3 userspace USB Bluetooth HCI: independent controller feasibility
 
 **Date:** 2026-11-02. **Scope:** Architecture B2 research only; no M3 USB/BT access, no module loads, no daemon, no new library injected, no full BSP. PR #52 remains Draft. PR #50 reverse engineering and PR #51 OEM source-modification workstreams remain separate.
