@@ -37,7 +37,7 @@ ASAN_OPTIONS=detect_leaks=1 ./test_v3_san
 20/20 PASS (provisional UHID session lifecycle host)
 ```
 
-All **five modified-file hunks** matched the exact pinned H618 source and valid unified diff old/new counts/offsets; the new header was compared byte-for-byte to the host version. **Full BSP `git apply --check`, Android Soong/ABI build and M3 runtime test were NOT performed**; the matching full BSP is absent from the operator's earlier PR #51 readiness environment. The committed Python verifier was NOT independently run in this increment. All 20 are host model scenarios, **not 20 on-device tests**.
+All **five modified-file hunks** matched the exact pinned H618 source and valid unified diff old/new counts/offsets; the new header was compared byte-for-byte to the host version. A real **scratch-tree `git apply --check`** against the blob-verified pinned H618 source has now **PASSED** in [CI run 41456280613](https://github.com/franfran/android-bt-gamepad/actions/runs/41456280613). **Full Android BSP build and M3 runtime test remain unperformed**; the matching full BSP is absent from the operator's earlier PR #51 readiness environment. The committed Python verifier was NOT independently run in this increment. All 20 are host model scenarios, **not 20 on-device tests**.
 
 ## Why the v3 patch must remain DISABLED
 
