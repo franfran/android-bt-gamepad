@@ -75,7 +75,7 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
        p_dev->hh_poll_thread_id =
            create_thread(btif_hh_poll_event_thread, p_dev);
        break;
-@@ -374,7 +405,22 @@
+@@ -374,7 +405,23 @@
            return;
          } else {
            APPL_TRACE_DEBUG("%s: uhid fd = %d", __func__, p_dev->fd);
