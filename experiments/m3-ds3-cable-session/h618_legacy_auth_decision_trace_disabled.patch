@@ -1,19 +1,19 @@
 diff --git a/system/bt/stack/btm/btm_sec.cc b/system/bt/stack/btm/btm_sec.cc
 --- a/system/bt/stack/btm/btm_sec.cc
 +++ b/system/bt/stack/btm/btm_sec.cc
-@@ -615,7 +615,12 @@
-                       uint8_t* p_pin) {
-   tBTM_SEC_DEV_REC* p_dev_rec;
+@@ -642,7 +642,12 @@
+   if ((pin_len > PIN_CODE_LEN) || (pin_len == 0) || (p_pin == NULL))
+     res = BTM_ILLEGAL_VALUE;
  
 +#if defined(RETROBOX_DS3_LEGACY_AUTH_TRACE)
 +  BTM_TRACE_EVENT("RB_AUTH ui_pin_reply accepted=%d state=%u",
 +                  res == BTM_SUCCESS,
 +                  static_cast<unsigned>(btm_cb.pairing_state));
 +#endif
-   BTM_TRACE_API(
-       "BTM_PINCodeReply(): PairState: %s   PairFlags: 0x%02x  PinLen:%d  "
-       "Result:%d",
-       btm_pair_state_descr(btm_cb.pairing_state), btm_cb.pairing_flags, pin_len,
+   if (res != BTM_SUCCESS) {
+     /* if peer started dd OR we started dd and pre-fetch pin was not used send
+      * negative reply */
+     if ((btm_cb.pairing_flags & BTM_PAIR_FLAGS_PEER_STARTED_DD) ||
 @@ -3044,7 +3049,16 @@
    tBTM_PAIRING_STATE old_state = btm_cb.pairing_state;
    tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
