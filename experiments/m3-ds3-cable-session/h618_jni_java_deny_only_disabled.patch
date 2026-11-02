@@ -105,7 +105,16 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
 +        mRetroboxServiceGeneration++;
          initializeNative();
          mNativeAvailable = true;
-@@ -114,6 +135,8 @@
+@@ -107,13 +128,17 @@
+     @Override
+     protected boolean stop() {
+         if (DBG) {
+             Log.d(TAG, "Stopping Bluetooth HidHostService");
+         }
++        mRetroboxServiceGeneration++;
++        mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE);
+         return true;
+     }
  
      @Override
      protected void cleanup() {
@@ -114,7 +123,7 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
 +        mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE);
          if (mNativeAvailable) {
              cleanupNative();
-@@ -183,5 +206,16 @@
+@@ -183,5 +208,16 @@
                  }
                  break;
 +                case MESSAGE_RETROBOX_CANDIDATE: {
@@ -131,7 +140,7 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
                  case MESSAGE_CONNECT_STATE_CHANGED: {
                      BluetoothDevice device = getAnonymousDevice((byte[]) msg.obj);
                      Attributable.setAttributionSource(device,
-@@ -808,5 +842,18 @@
+@@ -808,5 +844,18 @@
      }
  
 +    // Private JNI candidate observation, not the existing connected-state HAL.
@@ -150,7 +159,7 @@ diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostServic
      // This method does not check for error conditon (newState == prevState)
      private void broadcastConnectionState(BluetoothDevice device, int newState) {
          Integer prevStateInteger = mInputDevices.get(device);
-@@ -977,5 +1024,9 @@
+@@ -977,5 +1026,9 @@
      private native boolean setIdleTimeNative(byte[] btAddress, byte idleTime);
  
      private native boolean getIdleTimeNative(byte[] btAddress);
