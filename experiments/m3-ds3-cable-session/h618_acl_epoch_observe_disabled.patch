@@ -12,7 +12,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
  
  #include "device/include/controller.h"
  #include "main/shim/l2c_api.h"
-@@ -41,7 +44,22 @@
+@@ -41,7 +44,29 @@
  #include "types/bt_transport.h"
  #include "types/raw_address.h"
  
@@ -31,11 +31,18 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
 +      p_lcb->Handle(), RetroboxLcbIdentity(p_lcb));
 +  return ticket ? ticket->generation : 0;
 +}
++// Called at final LCB release as well as disconnect; duplicate cleanup is safe.
++void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb) {
++  if (p_lcb == nullptr || p_lcb->transport != BT_TRANSPORT_BR_EDR) return;
++  const auto ticket = g_retrobox_acl_observer.Current(
++      p_lcb->Handle(), RetroboxLcbIdentity(p_lcb));
++  if (ticket) g_retrobox_acl_observer.Retire(*ticket);
++}
 +#endif
  
  bool BTM_ReadPowerMode(const RawAddress& remote_bda, tBTM_PM_MODE* p_mode);
  bool btm_dev_support_role_switch(const RawAddress& bd_addr);
-@@ -185,7 +203,15 @@
+@@ -185,7 +210,15 @@
  
    if (ci.status == HCI_SUCCESS) {
      /* Connected OK. Change state to connected */
@@ -51,7 +58,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
  
      /* Get the peer information if the l2cap flow-control/rtrans is supported */
      l2cu_send_peer_info_req(p_lcb, L2CAP_EXTENDED_FEATURES_INFO_TYPE);
-@@ -301,7 +327,16 @@
+@@ -301,7 +334,16 @@
    for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb; p_ccb = p_next_ccb) {
      p_next_ccb = p_ccb->p_next_ccb;
  
@@ -68,7 +75,7 @@ diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.
        switch (status) {
          case BTM_SUCCESS:
            l2c_csm_execute(p_ccb, L2CEVT_SEC_COMP, &ci);
-@@ -347,8 +382,19 @@
+@@ -347,8 +389,19 @@
    /* If we don't have one, maybe an SCO link. Send to MM */
    if (!p_lcb) {
      status = false;
@@ -119,6 +126,33 @@ diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
          auto status = btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
                                                 p_ccb->p_rcb->psm, false,
                                                 &l2c_link_sec_comp, p_ccb);
+diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_utils.cc
+--- a/system/bt/stack/l2cap/l2c_utils.cc
++++ b/system/bt/stack/l2cap/l2c_utils.cc
+@@ -42,7 +42,10 @@
+ #include "stack/include/acl_api.h"
+ #include "stack/include/hci_error_code.h"
+ 
+ tL2C_CCB* l2cu_get_next_channel_in_rr(tL2C_LCB* p_lcb); // TODO Move
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++extern void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb);
++#endif
+ 
+ /*******************************************************************************
+  *
+@@ -146,8 +149,12 @@
+  * Returns          void
+  *
+  ******************************************************************************/
+ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
+   tL2C_CCB* p_ccb;
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++  // Source also releases LCBs without a dedicated HCI disconnect-complete.
++  retrobox_acl_retire_for_lcb(p_lcb);
++#endif
+ 
+   p_lcb->in_use = false;
+   p_lcb->ResetBonding();
 diff --git a/system/bt/stack/l2cap/retrobox_acl_epoch_observer.h b/system/bt/stack/l2cap/retrobox_acl_epoch_observer.h
 new file mode 100644
 --- /dev/null
