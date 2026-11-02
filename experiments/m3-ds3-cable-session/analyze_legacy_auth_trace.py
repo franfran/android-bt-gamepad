@@ -27,7 +27,7 @@ def summarize(lines):
         if not match or match.group(1) not in STAGES:
             continue
         kind = match.group(1)
-        props = dict(ATTR.findall(match.group(2)))
+        props = dict(ATTR.findall(match.group(1) + match.group(2)))
         # Only emit whitelisted, non-sensitive metadata; discard original line.
         events.append((kind, props))
 
