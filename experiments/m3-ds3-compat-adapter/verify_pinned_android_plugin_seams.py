@@ -107,10 +107,13 @@ M3_OBSERVED_BT_RESOLVER_SERVICES = (
 
 def check_m3_resolver_public_manifest(manifest_text):
     # Parse ONLY explicit service entries, never receiver/provider names.
-    services = re.findall(
-        r'<service\\b[\\s\\S]*?android:name\\s*=\\s*["\\\']\\.([A-Za-z0-9_.]+)["\\\']',
-        manifest_text,
-    )
+    services = [
+        value[1:]
+        for value in re.findall(
+            r'<service\b[^>]*\bandroid:name\s*=\s*"(\.[A-Za-z0-9_.]+)"',
+            manifest_text, flags=re.DOTALL
+        )
+    ]
     missing = sorted(set(M3_OBSERVED_BT_RESOLVER_SERVICES) - set(services))
     if len(M3_OBSERVED_BT_RESOLVER_SERVICES) != 22 or missing:
         raise ValueError("M3 resolver not covered by pinned public service manifest")
