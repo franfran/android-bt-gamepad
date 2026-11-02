@@ -29,7 +29,7 @@ Pinned source:
 
 ## 3. Verification actually completed
 
-**Patch integrity:** all **11 original source hunks** (five JNI, six Java) were checked line-by-line against the exact pinned H618 upstream GitHub file, with expected unified diff old/new counts and cumulative line offsets. No original source lines removed. The C++ feature macro remains undefined in the Android build. Full Android Soong/Java/ARM32 runtime build and a full-tree \`git apply --check\` **have NOT been run**.
+**Patch integrity:** all **11 original source hunks** (five JNI, six Java) were checked line-by-line against the exact pinned H618 upstream GitHub file, with expected unified diff old/new counts and cumulative line offsets. No original source lines removed. The C++ feature macro remains undefined in the Android build. Full Android Soong/Java/ARM32 runtime build and full BSP checkout have NOT been run. However a real pinned-source, scratch-tree `git apply --check` has now passed in CI (see update below).
 
 **Host smoke checks using manually extracted exact added function blocks** in isolated Linux stand-ins:
 - Java \`javac -Xlint:all\` source-shaped class/Handler: **9/9 PASS**. Includes async queueing, copying mutable address input, stale service generation, invalid ticket suppression, no native availability, queue removal, and approve=false.
@@ -41,7 +41,7 @@ Pinned source:
 - \`experiments/m3-ds3-cable-session/test_h618_jni_candidate_cpp_patch.py\` extracts C++ observer + always-denied JNI reply from the actual committed patch, compiles against stand-in types and runs ASan+UBSan. GCC required.
 - \`run_cpp_host_tests.sh\` now invokes the C++ extractor; Java extractor is separate because not all minimal Ubuntu hosts have \`javac\` installed.
 
-**Important qualification:** the exact committed Python source-extraction wrappers have **not themselves been executed in this increment**; their equivalent source-shaped snippets were compiled manually with 9/9 each. Run the exact scripts in a checkout for reproducibility:
+**Updated CI verification (2026-11-02):** [Pinned H618 Patch Apply run 41456280613](https://github.com/franfran/android-bt-gamepad/actions/runs/41456280613) verified the exact upstream Git blobs and performed a real `git apply --check` of the committed JNI/Java patch (**PASS**). An initial CI failure found a fictitious EOF blank-context line in the Java patch, corrected in commit `c5831c6`. The same CI run executed the **exact committed** source-extracted JNI C++ test with G++ ASan/UBSan (**9/9 PASS**) and Java test with javac (**9/9 PASS**). Host mocks do not establish Android JNI compile, actual Native admission, or M3 operation. Reproduce:
 \`\`\`bash
 python3 experiments/m3-ds3-cable-session/test_h618_jni_candidate_cpp_patch.py
 python3 experiments/m3-ds3-cable-session/test_h618_jni_java_deny_only_patch.py
