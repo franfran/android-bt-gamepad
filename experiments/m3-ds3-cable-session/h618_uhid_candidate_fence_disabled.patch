@@ -50,6 +50,26 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
  
    if (ret < 0) {
      int rtn = -errno;
+@@ -510,11 +536,19 @@
+   int result;
+   struct uhid_event ev;
+ 
+   if (p_dev->fd < 0) {
+     APPL_TRACE_WARNING("%s: Error: fd = %d, dscp_len = %d", __func__, p_dev->fd,
+                        dscp_len);
+     return;
+   }
++#if defined(RETROBOX_DS3_UHID_FENCE_RESEARCH)
++  // Avoid the stock error/close-on-failed-UHID_CREATE path for candidates.
++  // The lower uhid_write barrier remains the final enforcement point.
++  if (!g_retrobox_candidate_fence.AllowKernelEvent(p_dev->fd, true)) {
++    APPL_TRACE_WARNING("RetroBox candidate descriptor held before UHID_CREATE");
++    return;
++  }
++#endif
+ 
+   APPL_TRACE_WARNING("%s: fd = %d, name = [%s], dscp_len = %d", __func__,
+                      p_dev->fd, dev_name, dscp_len);
 diff --git a/system/bt/btif/co/retrobox_candidate_uhid_fence.h b/system/bt/btif/co/retrobox_candidate_uhid_fence.h
 new file mode 100644
 --- /dev/null
