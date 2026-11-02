@@ -35,6 +35,25 @@ A BlueZ Sixaxis plugin implements **a different in-daemon plugin loader plus USB
 
 **Owner original exact-OEM identities, private:** `m3-original-2024-libbluetooth.so` original SHA256 `4ce119eda2dc211cb38085e8fde3d7ee2fbaaa243df9b20e21636e3c4962bd85`; ELF Build ID `0d29a62178e43066e018216c1f1d5b18`. Original M3 JNI SHA256 `1db644b6e2203431e95d55d420729db054fa7f2f8e0bd2f8cbd35a00abf17dfd`; original Bluetooth APK SHA256 `d12506341ffa2e733603a43bb9776b590d1fc3eb5c4655b13699cec4b58d7e0f`. A previously inspected 2025 Android APK comparison is **not** a 2024 native loader proof. Do not upload these proprietary files or addresses to public GitHub/CI.
 
+### Recovery of the original M3 **mini-debug symbol-table investigation** (ready but NOT run on OEM bytes)
+
+Earlier [Stage 3C Gate 2 exact-OEM source-provenance report](../research/retrobox-stage3c-gate2-native-symbol-recovery.md) recorded that the **original owner-verified** 2024 `libbluetooth.so` contains an XZ-compressed `.gnu_debugdata` mini-ELF with a native symbol table. This is a materially stronger **available inspection technique** than searching ELF `strings` alone. That historical report directly recovered `hidh_conn_reg()`, `hidh_l2cif_connect_ind()`, `btm_sec_mx_access_request()`, `btm_sec_auth_complete()`, etc. It did **not** establish any OEM removable plugin loader.
+
+To preserve this capability in PR #52, committed [original M3 mini-debug plugin-symbol triage](../experiments/m3-ds3-compat-adapter/audit_oem_minidebug_symbols_offline.py). It validates **original exact SHA + Build ID** before parsing embedded XZ mini-ELF; extracts with strict section bounds and 16 MiB decompression cap; uses a private ephemeral file for readelf; prints only *predeclared known symbol names* and a **count** of other plugin-looking names, never raw private symbols, addresses, paths, PINs or link keys. A nonzero count is **triage only** and absolutely **NOT a plugin ABI/callsite**; a zero count is **not proof of absence**.
+
+The [17 existing ELF metadata tests + 9 new mini-debug gate tests](https://github.com/franfran/android-bt-gamepad/actions/runs/41485321125) completed **SUCCESS**: decoded GitHub Actions log confirms **17 tests / OK**, then **9 tests / OK** at workflow commit `11b399f6`. **All 26 tests use only synthetic host objects**. No proprietary M3 ELF was supplied to CI or inspected by either checker, because access is denied in this research session.
+
+If private 2024 original binary is later available on a trusted host, run read-only:
+
+```bash
+python3 experiments/m3-ds3-compat-adapter/audit_oem_plugin_elf_offline.py \
+  /PRIVATE/ORIGINAL/libbluetooth.so
+python3 experiments/m3-ds3-compat-adapter/audit_oem_minidebug_symbols_offline.py \
+  /PRIVATE/ORIGINAL/libbluetooth.so
+```
+
+These probes **cannot themselves deliver plugin GO or comprehensive OEM NO_GO**: follow any plausible actual loader/registration symbol through disassembly/ABI/callsite and subsequent BTM/HID/Java/UHID authority. Do not upload inputs or raw results that might identify private devices.
+
 **This session explicitly attempted authorized raw-byte access** to original 2024 ELF, JNI zip and APK zip from the Owner's previously uploaded Library records. The file system returned `This Project file does not have an authorized raw-byte materialization path` for each. Container `/mnt/data` held no uploaded original bytes. The previously committed [fail-closed original ELF metadata auditor](../experiments/m3-ds3-compat-adapter/audit_oem_plugin_elf_offline.py) **could not be run against real OEM bytes**; host synthetic tests only validate auditor behavior. It is dishonest to mark this missing test PASS or imply no `dlopen` import in original.
 
 **If private original bytes become available in a later authorized session**, the ONLY remaining plugin-oriented examination is:
