@@ -1,0 +1,48 @@
+diff --git a/system/bt/stack/btm/btm_sec.cc b/system/bt/stack/btm/btm_sec.cc
+--- a/system/bt/stack/btm/btm_sec.cc
++++ b/system/bt/stack/btm/btm_sec.cc
+@@ -1731,10 +1731,20 @@
+   } else {
+     security_required = p_serv_rec->security_flags;
+   }
+ 
++#if defined(RETROBOX_DS3_BTM_AUTH_OBSERVE)
++  // Read-only, no address/key/PIN logged; does NOT authorize cable-paired HID.
++  // PSM is available HERE; the requirements helper below drops it.
++  if (!is_originator && (psm == 0x0011 || psm == 0x0013)) {
++    LOG_INFO("RetroBox observe inbound HID PSM=0x%04x security=0x%04x "
++             "security_mode=%u",
++             psm, security_required,
++             static_cast<unsigned>(btm_cb.security_mode));
++  }
++#endif
+   return btm_sec_l2cap_access_req_by_requirement(
+       bd_addr, security_required, is_originator, p_callback, p_ref_data);
+ }
+ 
+ /*******************************************************************************
+  *
+diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.cc
+--- a/system/bt/stack/l2cap/l2c_link.cc
++++ b/system/bt/stack/l2cap/l2c_link.cc
+@@ -300,10 +300,20 @@
+   /* Match p_ccb with p_ref_data returned by sec manager */
+   for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb; p_ccb = p_next_ccb) {
+     p_next_ccb = p_ccb->p_next_ccb;
+ 
+     if (p_ccb == p_ref_data) {
+       switch (status) {
++#if defined(RETROBOX_DS3_BTM_AUTH_OBSERVE)
++      // Only observe the matching live CCB, never dereference a stale ref.
++      // No peer address or HID input bytes are logged.
++      if (p_ccb->p_rcb != nullptr &&
++          (p_ccb->p_rcb->psm == 0x0011 || p_ccb->p_rcb->psm == 0x0013)) {
++        LOG_INFO("RetroBox observe HID security callback PSM=0x%04x "
++                 "BTM_status=%d",
++                 p_ccb->p_rcb->psm, static_cast<int>(status));
++      }
++#endif
+         case BTM_SUCCESS:
+           l2c_csm_execute(p_ccb, L2CEVT_SEC_COMP, &ci);
+           break;
+ 
