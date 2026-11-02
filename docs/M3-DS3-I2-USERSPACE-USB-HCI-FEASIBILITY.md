@@ -10,7 +10,7 @@ Read [actual M3 kernel audit](M3-DS3-I2-M3-KERNEL-USB-BT-DONGLE-CONFIG-AUDIT.md)
 
 **Consequences:**
 - **NO_GO:** assuming a conventional kernel `btusb` Bluetooth HCI device appears as `hci1`. No `btusb` driver is configured.
-- **CONDITIONAL:** Linux USB core/Host Controller and usbfs can give a *separate USB dongle* directly to a userspace process. The absence of kernel `btusb` is not itself a reason to reject userspace USB requests; but it is also **not proof** of working USB Host hardware, loaded `.ko` files, populated `/dev/bus/usb`, permissions, chipset firmware or usable HCI.
+- **CONDITIONAL:** Linux USB core/Host Controller and usbfs can give a *separate USB dongle* directly to a userspace process. The absence of kernel `btusb` is not itself a reason to reject userspace USB requests. **Important existing M3 hardware result:** the Owner already successfully played DS3 via a wired USB connection in RetroArch (see [`docs/STATUS.md`](STATUS.md)), so at least one USB Host + USB HID path has operated on M3. This **does not** prove that a Bluetooth dongle enumerates, that all SUNXI modules are currently loaded, that usbfs nodes/permissions exist, or that USB HCI can be used from an APK/daemon.
 - **Do not confuse internal controller:** prior M3 observations associate its existing Bluetooth service with OEM Android HCI HAL and vendor AIC UART path. `CONFIG_BT_HCIUART=n` is consistent with no Linux standard HCIUART driver; it does **not** prove how proprietary HAL is implemented. The built-in controller is **not** an Android `UsbDevice` that `libusb` can automatically take over.
 
 ## Why an additional dongle? Controller ownership, not missing Bluetooth capability
@@ -70,7 +70,7 @@ Reproduce with `python3 experiments/m3-ds3-compat-adapter/usb_hci_descriptor_gat
 | Gate | Evidence needed | Status | Stop condition |
 | --- | --- | --- | --- |
 | B2-0 kernel configuration | Exact Owner config `btusb=n`, USB Host symbols, UHID/uinput | **PROVEN config** | No claim of working Host modules |
-| B2-1 read-only M3 Host inventory | Determine if physical USB Host port enumerates and SUNXI modules are actually present/loaded; Android `UsbManager` Host feature and USB device nodes; redact USB serial/device identifiers | **UNTESTED, Owner-approved only** | No USB Host enumeration/usable port -> NO_GO |
+| B2-1 read-only M3 Host inventory | Build on the already-proven wired USB DS3 input; check dongle-specific enumeration and SUNXI module presence/load state, Android `UsbManager` Host feature and usbfs device nodes; redact USB serial/device identifiers | **PARTIAL: wired DS3 Host success PROVEN; dongle/usbfs UNTESTED, Owner-approved only** | No USB dongle enumeration/usable usbfs route -> NO_GO |
 | B2-2 descriptor evidence | Inspect descriptors of an **independent USB Bluetooth dongle** (if owner has one), apply descriptor gate; no interface claim or USB writes | **UNTESTED** | No suitable or manufacturer-documented HCI USB transport -> NO_GO |
 | B2-3 authorized exclusive USB device | Grant USB permission through Android app, wrap the device's FD; later, separately approved interface claim, no automatic detach/reset; avoid OEM radio | **UNTESTED** | Cannot obtain owned, stable handle without system/AVB changes -> NO_GO |
 | B2-4 non-DS3 HCI transport smoke | After fresh authorization, read only controller HCI version/features through **dedicated** USB dongle; confirm event/ACL endpoint handling and genuine HCI callbacks | **UNTESTED / device operation** | Missing firmware/USB transport/claim stability -> NO_GO |
@@ -88,3 +88,9 @@ A separately reviewed **read-only** inspection should collect *redacted facts*, 
 - **C:** fallback native source integration requires new explicit Owner decision. Do not start a full BSP or modify OEM Bluetooth on PR #52.
 
 **Safety:** No M3 operation or modification performed. No USB interface claimed, driver detached, firmware loaded, Bluetooth restarted, pairing attempted, or input events injected. PR #52 Draft, #50/#51 separate and untouched.
+
+## Executed offline-only CI (2026-11-02)
+
+[GitHub Actions run 41463143830](https://github.com/franfran/android-bt-gamepad/actions/runs/41463143830) completed **SUCCESS** on commit `5fbc627033a40aa43bae12c202d972107edc4538`; decoded logs explicitly show **`Ran 14 tests` and `OK`** for the exact committed Python gate/test files. No actual M3 USB device has been enumerated. Passed assertions cover descriptor shape, alternative endpoints, absent/mismatched interface, missing/bad endpoints, duplicate, alternate setting, multiple candidates, non-HCI device coexistence, sanitizer rejection and CLI privacy.
+
+**Physical enrollment consequence:** existing sixpair enrollment targets the **onboard OEM Bluetooth controller**. If a *different* USB dongle becomes the DS3 host, the DS3 must be enrolled over USB *again*, using the second dongle's host address. Never overwrite the controller address blindly, post real addresses or claim a re-enrolled DS3 should automatically connect to both hosts.
