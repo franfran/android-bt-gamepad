@@ -66,7 +66,7 @@ python3 -m unittest discover -s experiments/m3-ds3-compat-adapter \
   -p test_classify_sanitized_hci_timeout.py -v
 \`\`\`
 
-The preexisting [Legacy Auth Trace CI](../.github/workflows/retrobox-legacy-auth-trace.yml) was extended to invoke these tests; check its **exact run status** before claiming results.
+The preexisting [Legacy Auth Trace CI](../.github/workflows/retrobox-legacy-auth-trace.yml) was extended to invoke these tests. **[Actual GitHub Actions run 41475207689](https://github.com/franfran/android-bt-gamepad/actions/runs/41475207689) completed SUCCESS** at documentation commit `796075fb9b`: the earlier observer regression ran **13 tests / OK**, followed by **17 new sanitized-HCI synthetic tests / OK**. A previous [run 41475062170](https://github.com/franfran/android-bt-gamepad/actions/runs/41475062170) also reported the same 13 + 17 tests successfully. These are host-only test validations, not raw HCI analysis or a real device test.
 
 ## Remaining acceptance and safety decisions
 
