@@ -1,0 +1,33 @@
+name: RetroBox DS3 Userspace USB HCI Descriptor Gate (Host Only)
+
+on:
+  push:
+    branches:
+      - research/m3-ds3-compat-adapter
+    paths:
+      - "experiments/m3-ds3-compat-adapter/usb_hci_descriptor_gate.py"
+      - "experiments/m3-ds3-compat-adapter/test_usb_hci_descriptor_gate.py"
+      - ".github/workflows/retrobox-usb-hci-descriptor-gate.yml"
+  pull_request:
+    paths:
+      - "experiments/m3-ds3-compat-adapter/usb_hci_descriptor_gate.py"
+      - "experiments/m3-ds3-compat-adapter/test_usb_hci_descriptor_gate.py"
+      - ".github/workflows/retrobox-usb-hci-descriptor-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Synthetic descriptor preflight (no Android/USB/HCI/network)
+        run: |
+          python3 -m unittest discover \
+            -s experiments/m3-ds3-compat-adapter \
+            -p test_usb_hci_descriptor_gate.py -v
