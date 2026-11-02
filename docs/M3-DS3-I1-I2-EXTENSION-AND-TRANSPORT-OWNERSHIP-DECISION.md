@@ -1,3 +1,5 @@
+> **2026-11-02 Owner reprioritization:** This file records a historical broader architecture comparison. PR #52 now actively tests **only A: real supported M3/OEM plugin extension**, using [plugin-only decision gates](M3-DS3-I1-PLUGIN-ONLY-ACCEPTANCE-AND-OEM-ABI-AUDIT.md). Public H618 source NO_GO for a standard drop-in HID Host plugin is **provisional**, NOT proof that M3 OEM has no private extension. B2 dongle and standalone USB HCI work are deferred to a different future PR; C full BSP is separate PR #51. Do not treat prior "next action" on B2 as active.
+
 # PR #52 I1/I2 — supported extension and standalone transport ownership decision
 
 **Date:** 2026-11-02. **Status:** source-only architecture checkpoint; no deployment, no wireless DS3 success. **PR:** Draft #52 `research/m3-ds3-compat-adapter`. Do not merge or modify PR #50 (reverse engineering) or #51 (source rebuild fallback).
