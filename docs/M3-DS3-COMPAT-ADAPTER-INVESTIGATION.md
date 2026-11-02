@@ -1,3 +1,5 @@
+> **OWNER SCOPE LOCK (2026-11-02): PR #52 investigates ONLY an installable/removable plugin for M3's existing Bluetooth controller, without replacing OEM `libbluetooth.so`. Read [I1 plugin-only acceptance and OEM ABI audit](M3-DS3-I1-PLUGIN-ONLY-ACCEPTANCE-AND-OEM-ABI-AUDIT.md) first. Candidate B2 (USB dongle/userspace USB HCI) is **DEFERRED** for a separate future PR and not part of current development. Full BSP/source rewrite stays PR #51, never auto-started. Prior wide A/B/C/D investigation below is historical context; **current next work is OEM plugin load/registration/ABI evidence P1-P4**, not dongle or full BSP.
+
 # M3 DS3 compatibility adapter — architecture investigation
 
 Status: **research only / NO_GO for runtime deployment**. Branch: `research/m3-ds3-compat-adapter` from `main`. Independent of Draft PR #51 (source-first Fluoride patch) and Draft PR #50 (reverse-engineering archive).
