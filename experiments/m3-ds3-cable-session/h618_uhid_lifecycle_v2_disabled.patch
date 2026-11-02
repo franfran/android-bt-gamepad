@@ -1,0 +1,210 @@
+diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
+--- a/system/bt/btif/co/bta_hh_co.cc
++++ b/system/bt/btif/co/bta_hh_co.cc
+@@ -31,11 +31,31 @@
+ #include "bta_api.h"
+ #include "bta_hh_api.h"
+ #include "bta_hh_co.h"
+ #include "btif_hh.h"
++#if defined(RETROBOX_DS3_UHID_LIFECYCLE_V2_RESEARCH)
++#include "retrobox_candidate_lifecycle_gate.h"
++#endif
+ #include "btif_util.h"
+ #include "osi/include/osi.h"
+ 
+ const char* dev_path = "/dev/uhid";
++#if defined(RETROBOX_DS3_UHID_LIFECYCLE_V2_RESEARCH)
++namespace {
++retrobox::CandidateLifecycleGate g_retrobox_lifecycle;
++}
++// None of these have a trusted Native classifier caller yet.
++bool retrobox_register_candidate_v2(retrobox::CandidateLifecycleTicket ticket) {
++  return g_retrobox_lifecycle.RegisterCandidate(ticket);
++}
++bool retrobox_quarantine_candidate_v2(retrobox::CandidateLifecycleTicket ticket) {
++  return g_retrobox_lifecycle.Quarantine(ticket);
++}
++// Only a lifecycle owner may call this, INSTEAD OF stock close(fd).
++bool retrobox_close_quarantined_v2(retrobox::CandidateLifecycleTicket ticket) {
++  return g_retrobox_lifecycle.CloseQuarantined(
++      ticket, [](int fd) { return close(fd) == 0; });
++}
++#endif
+ 
+ #include "btif_config.h"
+ #define BTA_HH_NV_LOAD_MAX 16
+@@ -59,7 +79,16 @@
+ }
+ 
+ /*Internal function to perform UHID write and error checking*/
+ static int uhid_write(int fd, const struct uhid_event* ev) {
++#if defined(RETROBOX_DS3_UHID_LIFECYCLE_V2_RESEARCH)
++  const retrobox::UhidEventKind kind =
++      ev != nullptr && ev->type == UHID_CREATE ? retrobox::UhidEventKind::kCreate :
++      ev != nullptr && ev->type == UHID_INPUT ? retrobox::UhidEventKind::kInput :
++      ev != nullptr && ev->type == UHID_DESTROY ? retrobox::UhidEventKind::kDestroy :
++      retrobox::UhidEventKind::kOther;
++  // Check and actual kernel write stay in ONE candidate lifecycle lock.
++  return g_retrobox_lifecycle.WithKernelWrite(fd, kind, [&]() -> int {
++#endif
+   ssize_t ret;
+   OSI_NO_INTR(ret = write(fd, ev, sizeof(*ev)));
+ 
+@@ -73,10 +102,13 @@
+     return -EFAULT;
+   }
+ 
+-  return 0;
+-}
+-
+-/* Internal function to parse the events received from UHID driver*/
++  return 0;
++#if defined(RETROBOX_DS3_UHID_LIFECYCLE_V2_RESEARCH)
++  });
++#endif
++}
++
++/* Internal function to parse the events received from UHID driver*/
+ static int uhid_read_event(btif_hh_device_t* p_dev) {
+   CHECK(p_dev);
+ 
+@@ -510,11 +542,18 @@
+   int result;
+   struct uhid_event ev;
+ 
+   if (p_dev->fd < 0) {
+     APPL_TRACE_WARNING("%s: Error: fd = %d, dscp_len = %d", __func__, p_dev->fd,
+                        dscp_len);
+     return;
+   }
++#if defined(RETROBOX_DS3_UHID_LIFECYCLE_V2_RESEARCH)
++  // Early, non-authoritative hint. Final UHID writer checks under lock.
++  if (g_retrobox_lifecycle.IsBlocked(p_dev->fd)) {
++    APPL_TRACE_WARNING("RetroBox candidate descriptor pending/quarantined");
++    return;
++  }
++#endif
+ 
+   APPL_TRACE_WARNING("%s: fd = %d, name = [%s], dscp_len = %d", __func__,
+                      p_dev->fd, dev_name, dscp_len);
+diff --git a/system/bt/btif/co/retrobox_candidate_lifecycle_gate.h b/system/bt/btif/co/retrobox_candidate_lifecycle_gate.h
+new file mode 100644
+--- /dev/null
++++ b/system/bt/btif/co/retrobox_candidate_lifecycle_gate.h
+@@ -0,0 +1,116 @@
++// Host-only candidate lifecycle gate; no Bluetooth authentication grant.
++#ifndef RETROBOX_DS3_CANDIDATE_LIFECYCLE_GATE_H_
++#define RETROBOX_DS3_CANDIDATE_LIFECYCLE_GATE_H_
++
++#include <array>
++#include <cerrno>
++#include <cstddef>
++#include <cstdint>
++#include <mutex>
++#include <utility>
++
++namespace retrobox {
++struct CandidateLifecycleTicket {
++  int fd;
++  uint8_t hid_handle;
++  uint64_t acl_epoch;
++  uint64_t request_id;
++  bool operator==(const CandidateLifecycleTicket& other) const {
++    return fd == other.fd && hid_handle == other.hid_handle &&
++           acl_epoch == other.acl_epoch && request_id == other.request_id;
++  }
++};
++
++enum class UhidEventKind { kCreate, kInput, kDestroy, kOther };
++
++// All methods are serialized with WithKernelWrite, including its actual write.
++// This is a deny-only fence, NOT a trusted DS3 classifier or approval gate.
++class CandidateLifecycleGate {
++ public:
++  static constexpr size_t kCapacity = 8;
++
++  // A verified Native caller must classify BEFORE any UHID event. On failure,
++  // caller must close/abort the entire candidate (never fall through to stock).
++  bool RegisterCandidate(CandidateLifecycleTicket ticket) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (ticket.fd < 0 || ticket.hid_handle == 0xff ||
++        !ticket.acl_epoch || !ticket.request_id) return false;
++    for (const Slot& slot : slots_) {
++      if (slot.state != State::kFree &&
++          (slot.ticket.fd == ticket.fd ||
++           slot.ticket.hid_handle == ticket.hid_handle)) return false;
++    }
++    for (Slot& slot : slots_) {
++      if (slot.state == State::kFree) {
++        slot.ticket = ticket;
++        slot.state = State::kPending;
++        return true;
++      }
++    }
++    return false;
++  }
++
++  // Disconnect/Java veto keeps fd blocked until actual close. Exact ticket only.
++  bool Quarantine(CandidateLifecycleTicket ticket) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (Slot& slot : slots_) {
++      if (slot.state == State::kPending && slot.ticket == ticket) {
++        slot.state = State::kQuarantined;
++        return true;
++      }
++    }
++    return false;
++  }
++
++  // The close() action is intentionally inside the same lock as kernel writes.
++  // Requires proof of real close success from the caller (not merely a Boolean
++  // Java response). Failed close leaves the fd quarantined.
++  template <typename CloseFn>
++  bool CloseQuarantined(CandidateLifecycleTicket ticket, CloseFn&& close_fd) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (Slot& slot : slots_) {
++      if (slot.state == State::kQuarantined && slot.ticket == ticket) {
++        if (!std::forward<CloseFn>(close_fd)(ticket.fd)) return false;
++        slot.state = State::kFree;
++        return true;
++      }
++    }
++    return false;
++  }
++
++  // A single critical section covers candidate lookup AND the final write.
++  // Without this, disconnect/revoke after IsBlocked but before write is a TOCTOU.
++  template <typename WriteFn>
++  int WithKernelWrite(int fd, UhidEventKind event, WriteFn&& write_event) {
++    std::lock_guard<std::mutex> lock(mutex_);
++    if (event == UhidEventKind::kCreate || event == UhidEventKind::kInput) {
++      for (const Slot& slot : slots_) {
++        if (slot.state != State::kFree && slot.ticket.fd == fd)
++          return -EACCES;
++      }
++    }
++    return std::forward<WriteFn>(write_event)();
++  }
++
++  bool IsBlocked(int fd) const { // Early hint only; final write MUST recheck.
++    std::lock_guard<std::mutex> lock(mutex_);
++    for (const Slot& slot : slots_)
++      if (slot.state != State::kFree && slot.ticket.fd == fd) return true;
++    return false;
++  }
++
++  size_t Held() const {
++    std::lock_guard<std::mutex> lock(mutex_);
++    size_t result = 0;
++    for (const Slot& slot : slots_) result += slot.state != State::kFree;
++    return result;
++  }
++
++ private:
++  enum class State : uint8_t { kFree, kPending, kQuarantined };
++  struct Slot { CandidateLifecycleTicket ticket{}; State state = State::kFree; };
++  mutable std::mutex mutex_;
++  std::array<Slot, kCapacity> slots_{};
++};
++}  // namespace retrobox
++#endif  // RETROBOX_DS3_CANDIDATE_LIFECYCLE_GATE_H_

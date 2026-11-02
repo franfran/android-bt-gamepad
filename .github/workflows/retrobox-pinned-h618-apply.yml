@@ -1,0 +1,39 @@
+name: RetroBox Pinned H618 Patch Apply (Host Only)
+
+on:
+  pull_request:
+    paths:
+      - "experiments/m3-ds3-cable-session/verify_h618_pinned_git_apply.py"
+      - "experiments/m3-ds3-cable-session/h618_legacy_auth_decision_trace_disabled.patch"
+      - "experiments/m3-ds3-cable-session/h618_jni_java_deny_only_disabled.patch"
+      - "experiments/m3-ds3-cable-session/h618_uhid_provisional_v3_disabled.patch"
+      - ".github/workflows/retrobox-pinned-h618-apply.yml"
+  push:
+    branches: ["research/m3-ds3-compat-adapter"]
+    paths:
+      - "experiments/m3-ds3-cable-session/verify_h618_pinned_git_apply.py"
+      - "experiments/m3-ds3-cable-session/h618_legacy_auth_decision_trace_disabled.patch"
+      - "experiments/m3-ds3-cable-session/h618_jni_java_deny_only_disabled.patch"
+      - "experiments/m3-ds3-cable-session/h618_uhid_provisional_v3_disabled.patch"
+      - ".github/workflows/retrobox-pinned-h618-apply.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-source-overlay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout research patch files only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check upstream pinned Git blobs and apply contexts
+        run: python3 experiments/m3-ds3-cable-session/verify_h618_pinned_git_apply.py --profile all
+      - name: Compile source-extracted JNI with strict host sanitizers
+        run: python3 experiments/m3-ds3-cable-session/test_h618_jni_candidate_cpp_patch.py
+      - name: Compile source-extracted Java callback with javac
+        run: |
+          javac -version
+          python3 experiments/m3-ds3-cable-session/test_h618_jni_java_deny_only_patch.py

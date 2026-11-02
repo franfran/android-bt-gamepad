@@ -1,0 +1,250 @@
+diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.cc
+--- a/system/bt/stack/l2cap/l2c_link.cc
++++ b/system/bt/stack/l2cap/l2c_link.cc
+@@ -25,7 +25,10 @@
+  ******************************************************************************/
+ #define LOG_TAG "l2c_link"
+ 
+ #include <cstdint>
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++#include "stack/l2cap/retrobox_acl_epoch_observer.h"
++#endif
+ 
+ #include "device/include/controller.h"
+ #include "main/shim/l2c_api.h"
+@@ -41,7 +44,29 @@
+ #include "types/bt_transport.h"
+ #include "types/raw_address.h"
+ 
+ extern tBTM_CB btm_cb;
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++namespace {
++retrobox::AclEpochObserver g_retrobox_acl_observer;
++uintptr_t RetroboxLcbIdentity(const tL2C_LCB* p_lcb) {
++  return reinterpret_cast<uintptr_t>(p_lcb);
++}
++}  // namespace
++// Debug correlation only, not evidence of authenticated radio identity.
++uint64_t retrobox_acl_epoch_for_lcb(const tL2C_LCB* p_lcb) {
++  if (p_lcb == nullptr || p_lcb->transport != BT_TRANSPORT_BR_EDR) return 0;
++  const auto ticket = g_retrobox_acl_observer.Current(
++      p_lcb->Handle(), RetroboxLcbIdentity(p_lcb));
++  return ticket ? ticket->generation : 0;
++}
++// Called at final LCB release as well as disconnect; duplicate cleanup is safe.
++void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb) {
++  if (p_lcb == nullptr || p_lcb->transport != BT_TRANSPORT_BR_EDR) return;
++  const auto ticket = g_retrobox_acl_observer.Current(
++      p_lcb->Handle(), RetroboxLcbIdentity(p_lcb));
++  if (ticket) g_retrobox_acl_observer.Retire(*ticket);
++}
++#endif
+ 
+ bool BTM_ReadPowerMode(const RawAddress& remote_bda, tBTM_PM_MODE* p_mode);
+ bool btm_dev_support_role_switch(const RawAddress& bd_addr);
+@@ -185,7 +210,15 @@
+ 
+   if (ci.status == HCI_SUCCESS) {
+     /* Connected OK. Change state to connected */
+     p_lcb->link_state = LST_CONNECTED;
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++    const auto ticket = g_retrobox_acl_observer.Connected(
++        handle, RetroboxLcbIdentity(p_lcb));
++    if (ticket) {
++      LOG_INFO("RetroBox passive BR/EDR ACL connected epoch=%llu",
++               static_cast<unsigned long long>(ticket->generation));
++    }
++#endif
+ 
+     /* Get the peer information if the l2cap flow-control/rtrans is supported */
+     l2cu_send_peer_info_req(p_lcb, L2CAP_EXTENDED_FEATURES_INFO_TYPE);
+@@ -301,7 +334,16 @@
+   for (p_ccb = p_lcb->ccb_queue.p_first_ccb; p_ccb; p_ccb = p_next_ccb) {
+     p_next_ccb = p_ccb->p_next_ccb;
+ 
+     if (p_ccb == p_ref_data) {
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++      if (p_ccb->p_rcb != nullptr &&
++          (p_ccb->p_rcb->psm == 0x0011 || p_ccb->p_rcb->psm == 0x0013)) {
++        const uint64_t epoch = retrobox_acl_epoch_for_lcb(p_lcb);
++        LOG_INFO("RetroBox passive HID callback PSM=0x%04x epoch=%llu status=%d",
++                 p_ccb->p_rcb->psm, static_cast<unsigned long long>(epoch),
++                 static_cast<int>(status));
++      }
++#endif
+       switch (status) {
+         case BTM_SUCCESS:
+           l2c_csm_execute(p_ccb, L2CEVT_SEC_COMP, &ci);
+@@ -347,8 +389,19 @@
+   /* If we don't have one, maybe an SCO link. Send to MM */
+   if (!p_lcb) {
+     status = false;
+   } else {
+     p_lcb->SetDisconnectReason(reason);
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++    if (p_lcb->transport == BT_TRANSPORT_BR_EDR) {
++      const auto ticket = g_retrobox_acl_observer.Current(
++          handle, RetroboxLcbIdentity(p_lcb));
++      if (ticket) {
++        LOG_INFO("RetroBox passive ACL disconnected epoch=%llu",
++                 static_cast<unsigned long long>(ticket->generation));
++        g_retrobox_acl_observer.Retire(*ticket);
++      }
++    }
++#endif
+ 
+     /* Just in case app decides to try again in the callback context */
+     p_lcb->link_state = LST_DISCONNECTING;
+diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
+--- a/system/bt/stack/l2cap/l2c_csm.cc
++++ b/system/bt/stack/l2cap/l2c_csm.cc
+@@ -33,7 +33,11 @@
+ #include "l2cdefs.h"
+ #include "osi/include/log.h"
+ #include "stack/btm/btm_sec.h"
+ #include "stack/include/acl_api.h"
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++#include <cstdint>
++extern uint64_t retrobox_acl_epoch_for_lcb(const tL2C_LCB* p_lcb);
++#endif
+ 
+ /******************************************************************************/
+ /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
+@@ -297,7 +301,15 @@
+         if (!BTM_SetLinkPolicyActiveMode(p_ccb->p_lcb->remote_bd_addr)) {
+           LOG_WARN("Unable to set link policy active");
+         }
+         p_ccb->chnl_state = CST_TERM_W4_SEC_COMP;
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++        if (p_ccb->p_rcb != nullptr &&
++            (p_ccb->p_rcb->psm == 0x0011 || p_ccb->p_rcb->psm == 0x0013)) {
++          const uint64_t epoch = retrobox_acl_epoch_for_lcb(p_ccb->p_lcb);
++          LOG_INFO("RetroBox passive incoming HID PSM=0x%04x epoch=%llu",
++                   p_ccb->p_rcb->psm, static_cast<unsigned long long>(epoch));
++        }
++#endif
+         auto status = btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
+                                                p_ccb->p_rcb->psm, false,
+                                                &l2c_link_sec_comp, p_ccb);
+diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_utils.cc
+--- a/system/bt/stack/l2cap/l2c_utils.cc
++++ b/system/bt/stack/l2cap/l2c_utils.cc
+@@ -42,7 +42,10 @@
+ #include "stack/include/acl_api.h"
+ #include "stack/include/hci_error_code.h"
+ 
+ tL2C_CCB* l2cu_get_next_channel_in_rr(tL2C_LCB* p_lcb); // TODO Move
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++extern void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb);
++#endif
+ 
+ /*******************************************************************************
+  *
+@@ -146,8 +149,12 @@
+  * Returns          void
+  *
+  ******************************************************************************/
+ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
+   tL2C_CCB* p_ccb;
++#if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++  // Source also releases LCBs without a dedicated HCI disconnect-complete.
++  retrobox_acl_retire_for_lcb(p_lcb);
++#endif
+ 
+   p_lcb->in_use = false;
+   p_lcb->ResetBonding();
+diff --git a/system/bt/stack/l2cap/retrobox_acl_epoch_observer.h b/system/bt/stack/l2cap/retrobox_acl_epoch_observer.h
+new file mode 100644
+--- /dev/null
++++ b/system/bt/stack/l2cap/retrobox_acl_epoch_observer.h
+@@ -0,0 +1,90 @@
++// RetroBox host-testable, passive ACL lifetime correlation; NEVER an auth grant.
++#ifndef RETROBOX_ACL_EPOCH_OBSERVER_H_
++#define RETROBOX_ACL_EPOCH_OBSERVER_H_
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <limits>
++#include <optional>
++
++namespace retrobox {
++struct AclObservationTicket {
++  uint16_t hci_handle = 0;
++  uintptr_t lcb_identity = 0;  // Address used only within this process.
++  uint64_t generation = 0;
++  bool operator==(const AclObservationTicket& o) const {
++    return hci_handle == o.hci_handle && lcb_identity == o.lcb_identity &&
++           generation == o.generation;
++  }
++};
++
++class AclEpochObserver {
++ public:
++  static constexpr size_t kSlots = 32;
++  // A bounded, non-authorizing debug table; no peer addresses or key material.
++  explicit AclEpochObserver(size_t capacity = kSlots)
++      : capacity_(capacity <= kSlots ? capacity : kSlots) {}
++
++  std::optional<AclObservationTicket> Connected(uint16_t handle,
++                                                  uintptr_t lcb_identity) {
++    if (handle == 0xffff || !lcb_identity ||
++        next_generation_ == std::numeric_limits<uint64_t>::max())
++      return std::nullopt;
++    // A handle or LCB slot is reusable. Retire prior observations first.
++    for (size_t i = 0; i < capacity_; ++i) {
++      auto& slot = slots_[i];
++      if (slot.used && (slot.ticket.hci_handle == handle ||
++                        slot.ticket.lcb_identity == lcb_identity))
++        slot.used = false;
++    }
++    for (size_t i = 0; i < capacity_; ++i) {
++      auto& slot = slots_[i];
++      if (!slot.used) {
++        slot.ticket = {handle, lcb_identity, ++next_generation_};
++        slot.used = true;
++        return slot.ticket;
++      }
++    }
++    // Capacity exhausted: no guessed token and no unrelated eviction.
++    return std::nullopt;
++  }
++
++  std::optional<AclObservationTicket> Current(uint16_t handle,
++                                                uintptr_t lcb_identity) const {
++    for (size_t i = 0; i < capacity_; ++i) {
++      const auto& slot = slots_[i];
++      if (slot.used && slot.ticket.hci_handle == handle &&
++          slot.ticket.lcb_identity == lcb_identity)
++        return slot.ticket;
++    }
++    return std::nullopt;
++  }
++
++  bool Retire(AclObservationTicket ticket) {
++    for (size_t i = 0; i < capacity_; ++i) {
++      auto& slot = slots_[i];
++      if (slot.used && slot.ticket == ticket) {
++        slot.used = false;
++        return true;
++      }
++    }
++    return false;
++  }
++
++  void Clear() {
++    for (size_t i = 0; i < capacity_; ++i) slots_[i].used = false;
++    // Generation deliberately persists to prevent reuse on service reinit.
++  }
++
++ private:
++  struct Slot {
++    AclObservationTicket ticket;
++    bool used = false;
++  };
++  std::array<Slot, kSlots> slots_{};
++  size_t capacity_;
++  uint64_t next_generation_ = 0;
++};
++}  // namespace retrobox
++#endif  // RETROBOX_ACL_EPOCH_OBSERVER_H_

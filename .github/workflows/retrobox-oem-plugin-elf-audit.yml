@@ -1,0 +1,43 @@
+name: RetroBox M3 OEM Plugin ELF Audit (Host Only)
+
+on:
+  push:
+    branches:
+      - research/m3-ds3-compat-adapter
+    paths:
+      - "experiments/m3-ds3-compat-adapter/audit_oem_plugin_elf_offline.py"
+      - "experiments/m3-ds3-compat-adapter/test_audit_oem_plugin_elf_offline.py"
+      - "experiments/m3-ds3-compat-adapter/audit_oem_minidebug_symbols_offline.py"
+      - "experiments/m3-ds3-compat-adapter/test_audit_oem_minidebug_symbols_offline.py"
+      - ".github/workflows/retrobox-oem-plugin-elf-audit.yml"
+  pull_request:
+    paths:
+      - "experiments/m3-ds3-compat-adapter/audit_oem_plugin_elf_offline.py"
+      - "experiments/m3-ds3-compat-adapter/test_audit_oem_plugin_elf_offline.py"
+      - ".github/workflows/retrobox-oem-plugin-elf-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Unit tests for SHA-pinned, sanitized ELF inventory
+        run: |
+          python3 -m unittest discover \
+            -s experiments/m3-ds3-compat-adapter \
+            -p test_audit_oem_plugin_elf_offline.py -v
+      - name: Synthetic original-OEM .gnu_debugdata symbol gate (NO proprietary ELF)
+        run: |
+          python3 -m unittest discover \
+            -s experiments/m3-ds3-compat-adapter \
+            -p test_audit_oem_minidebug_symbols_offline.py -v
+      - name: Safety boundary
+        run: |
+          echo "No proprietary OEM binary in CI; no M3 access; cannot assert plugin GO or NO_GO"

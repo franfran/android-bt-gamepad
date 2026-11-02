@@ -1,0 +1,38 @@
+name: RetroBox Pinned Android Plugin Seams (Public Source, Host Only)
+
+on:
+  push:
+    branches: ["research/m3-ds3-compat-adapter"]
+    paths:
+      - "experiments/m3-ds3-compat-adapter/verify_pinned_android_plugin_seams.py"
+      - "experiments/m3-ds3-compat-adapter/test_verify_pinned_android_plugin_seams.py"
+      - ".github/workflows/retrobox-pinned-android-plugin-seams.yml"
+  pull_request:
+    paths:
+      - "experiments/m3-ds3-compat-adapter/verify_pinned_android_plugin_seams.py"
+      - "experiments/m3-ds3-compat-adapter/test_verify_pinned_android_plugin_seams.py"
+      - ".github/workflows/retrobox-pinned-android-plugin-seams.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  immutable-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test isolated fail-closed logic (no network)
+        run: |
+          python3 -m unittest discover \
+            -s experiments/m3-ds3-compat-adapter \
+            -p test_verify_pinned_android_plugin_seams.py -v
+      - name: Verify 10 immutable public Android 12 Git blobs and 10 plugin capability predicates
+        run: |
+          python3 experiments/m3-ds3-compat-adapter/verify_pinned_android_plugin_seams.py
+      - name: Device and deployment boundary
+        run: |
+          echo "PUBLIC SOURCE ONLY: not OEM M3 proof, no Bluetooth device, no APK or SO installation"

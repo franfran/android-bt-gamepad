@@ -1,0 +1,170 @@
+diff --git a/packages/apps/Bluetooth/jni/com_android_bluetooth_hid_host.cpp b/packages/apps/Bluetooth/jni/com_android_bluetooth_hid_host.cpp
+--- a/packages/apps/Bluetooth/jni/com_android_bluetooth_hid_host.cpp
++++ b/packages/apps/Bluetooth/jni/com_android_bluetooth_hid_host.cpp
+@@ -27,5 +27,8 @@
+ namespace android {
+ 
+ static jmethodID method_onConnectStateChanged;
++#if defined(RETROBOX_DS3_JAVA_ADMISSION_RESEARCH)
++static jmethodID method_onRetroboxCandidate;
++#endif
+ static jmethodID method_onGetProtocolMode;
+ static jmethodID method_onGetReport;
+@@ -71,5 +74,24 @@
+ }
+ 
++#if defined(RETROBOX_DS3_JAVA_ADMISSION_RESEARCH)
++// No caller is wired, and this event is NOT a security admission decision.
++// A real producer must supply an authenticated, immutable request ticket.
++void retrobox_hid_candidate_observe(RawAddress* address, jint hid_handle,
++                                    jlong acl_epoch, jlong request_id) {
++  if (address == nullptr || hid_handle < 0 || acl_epoch <= 0 ||
++      request_id <= 0) return;
++  std::shared_lock<std::shared_timed_mutex> lock(mCallbacks_mutex);
++  CallbackEnv callback_env(__func__);
++  if (!callback_env.valid() || !mCallbacksObj || !method_onRetroboxCandidate)
++    return;
++  ScopedLocalRef<jbyteArray> address_copy(callback_env.get(),
++                                          marshall_bda(address));
++  if (!address_copy.get()) return;
++  callback_env->CallVoidMethod(mCallbacksObj, method_onRetroboxCandidate,
++                               address_copy.get(), hid_handle,
++                               acl_epoch, request_id);
++}
++#endif
+ static void get_protocol_mode_callback(RawAddress* bd_addr,
+                                        bthh_status_t hh_status,
+                                        bthh_protocol_mode_t mode) {
+@@ -201,5 +223,9 @@
+   method_onGetIdleTime = env->GetMethodID(clazz, "onGetIdleTime", "([BI)V");
+ 
++#if defined(RETROBOX_DS3_JAVA_ADMISSION_RESEARCH)
++  method_onRetroboxCandidate =
++      env->GetMethodID(clazz, "onRetroboxHidCandidate", "([BIJJ)V");
++#endif
+   ALOGI("%s: succeeds", __func__);
+ }
+ 
+@@ -507,5 +533,13 @@
+ }
+ 
++#if defined(RETROBOX_DS3_JAVA_ADMISSION_RESEARCH)
++// No native admission registry is wired: ALL attempts fail closed.
++// An eventual response must look up a native-issued live request ticket.
++static jboolean retroboxAdmissionDecisionNative(JNIEnv*, jobject, jint,
++                                                 jlong, jlong, jboolean) {
++  return JNI_FALSE;
++}
++#endif
+ static JNINativeMethod sMethods[] = {
+     {"classInitNative", "()V", (void*)classInitNative},
+     {"initializeNative", "()V", (void*)initializeNative},
+@@ -520,5 +554,9 @@
+     {"sendDataNative", "([BLjava/lang/String;)Z", (void*)sendDataNative},
+     {"getIdleTimeNative", "([B)Z", (void*)getIdleTimeNative},
+     {"setIdleTimeNative", "([BB)Z", (void*)setIdleTimeNative},
++#if defined(RETROBOX_DS3_JAVA_ADMISSION_RESEARCH)
++    {"retroboxAdmissionDecisionNative", "(IJJZ)Z",
++     (void*)retroboxAdmissionDecisionNative},
++#endif
+ };
+ 
+diff --git a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostService.java b/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostService.java
+--- a/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostService.java
++++ b/packages/apps/Bluetooth/src/com/android/bluetooth/hid/HidHostService.java
+@@ -82,5 +82,25 @@
+     private static final int MESSAGE_GET_IDLE_TIME = 14;
+     private static final int MESSAGE_ON_GET_IDLE_TIME = 15;
+     private static final int MESSAGE_SET_IDLE_TIME = 16;
++    // Inactive unless the separately guarded JNI research emitter is built.
++    private static final int MESSAGE_RETROBOX_CANDIDATE = 1001;
++
++    private volatile long mRetroboxServiceGeneration = 0;
++
++    private static final class RetroboxCandidate {
++        final byte[] address;
++        final int handle;
++        final long aclEpoch;
++        final long requestId;
++        final long serviceGeneration;
++
++        RetroboxCandidate(byte[] addr, int h, long epoch, long req, long service) {
++            address = addr.clone();
++            handle = h;
++            aclEpoch = epoch;
++            requestId = req;
++            serviceGeneration = service;
++        }
++    }
+ 
+     static {
+@@ -98,5 +118,6 @@
+                 "DatabaseManager cannot be null when HidHostService starts");
+ 
+         mInputDevices = Collections.synchronizedMap(new HashMap<BluetoothDevice, Integer>());
++        mRetroboxServiceGeneration++;
+         initializeNative();
+         mNativeAvailable = true;
+@@ -107,13 +128,17 @@
+     @Override
+     protected boolean stop() {
+         if (DBG) {
+             Log.d(TAG, "Stopping Bluetooth HidHostService");
+         }
++        mRetroboxServiceGeneration++;
++        mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE);
+         return true;
+     }
+ 
+     @Override
+     protected void cleanup() {
+         if (DBG) Log.d(TAG, "Stopping Bluetooth HidHostService");
++        mRetroboxServiceGeneration++;
++        mHandler.removeMessages(MESSAGE_RETROBOX_CANDIDATE);
+         if (mNativeAvailable) {
+             cleanupNative();
+@@ -183,5 +208,16 @@
+                 }
+                 break;
++                case MESSAGE_RETROBOX_CANDIDATE: {
++                    RetroboxCandidate candidate = (RetroboxCandidate) msg.obj;
++                    if (candidate != null && mNativeAvailable
++                            && candidate.serviceGeneration == mRetroboxServiceGeneration) {
++                        // Explicit deny only. F2/F5 enrollment or MAC matching
++                        // cannot authorize a nonbonded Bluetooth session.
++                        retroboxAdmissionDecisionNative(candidate.handle,
++                                candidate.aclEpoch, candidate.requestId, false);
++                    }
++                }
++                break;
+                 case MESSAGE_CONNECT_STATE_CHANGED: {
+                     BluetoothDevice device = getAnonymousDevice((byte[]) msg.obj);
+                     Attributable.setAttributionSource(device,
+@@ -808,5 +844,18 @@
+     }
+ 
++    // Private JNI candidate observation, not the existing connected-state HAL.
++    // A genuine Native security decision and response registry DO NOT exist.
++    private void onRetroboxHidCandidate(byte[] address, int handle,
++                                         long aclEpoch, long requestId) {
++        if (!mNativeAvailable || address == null || address.length != 6
++                || handle < 0 || aclEpoch <= 0 || requestId <= 0) return;
++        RetroboxCandidate candidate = new RetroboxCandidate(
++                address, handle, aclEpoch, requestId, mRetroboxServiceGeneration);
++        Message msg = mHandler.obtainMessage(MESSAGE_RETROBOX_CANDIDATE);
++        msg.obj = candidate;
++        mHandler.sendMessage(msg);  // async; never block JNI waiting on Handler
++    }
++
+     // This method does not check for error conditon (newState == prevState)
+     private void broadcastConnectionState(BluetoothDevice device, int newState) {
+         Integer prevStateInteger = mInputDevices.get(device);
+@@ -977,4 +1026,8 @@
+     private native boolean setIdleTimeNative(byte[] btAddress, byte idleTime);
+ 
+     private native boolean getIdleTimeNative(byte[] btAddress);
++    // Registered only when the paired JNI research macro is enabled.
++    // Current JNI implementation rejects ALL responses (fail closed).
++    private native boolean retroboxAdmissionDecisionNative(
++            int handle, long aclEpoch, long requestId, boolean approve);
+ }

@@ -1,0 +1,95 @@
+diff --git a/system/bt/bta/hh/bta_hh_act.cc b/system/bt/bta/hh/bta_hh_act.cc
+--- a/system/bt/bta/hh/bta_hh_act.cc
++++ b/system/bt/bta/hh/bta_hh_act.cc
+@@ -55,8 +55,16 @@
+ /*****************************************************************************
+  *  Local Function prototypes
+  ****************************************************************************/
+ static void bta_hh_cback(uint8_t dev_handle, const RawAddress& addr,
+                          uint8_t event, uint32_t data, BT_HDR* pdata);
++#if defined(RETROBOX_DS3_PRIVATE_DESCRIPTOR_RESEARCH)
++// Research-only observation: no authorization, no change to BTA_HH callbacks.
++// BTIF implementation is available only when the same private flag is set.
++extern void btif_hh_ds3_probe_descriptor(uint8_t hid_handle, uint16_t vendor_id,
++                                         uint16_t product_id,
++                                         const uint8_t* descriptor,
++                                         uint16_t descriptor_len);
++#endif
+ static tBTA_HH_STATUS bta_hh_get_trans_status(uint32_t result);
+ 
+ static const char* bta_hh_get_w4_event(uint16_t event);
+@@ -902,8 +902,17 @@
+  * Returns          void
+  *
+  ******************************************************************************/
+ void bta_hh_get_dscp_act(tBTA_HH_DEV_CB* p_cb,
+                          UNUSED_ATTR const tBTA_HH_DATA* p_data) {
++#if defined(RETROBOX_DS3_PRIVATE_DESCRIPTOR_RESEARCH)
++  // Passive BR/EDR descriptor snapshot; normal HID path below is unchanged.
++  if (p_cb != nullptr && !p_cb->is_le_device) {
++    btif_hh_ds3_probe_descriptor(
++        p_cb->hid_handle, p_cb->dscp_info.vendor_id,
++        p_cb->dscp_info.product_id, p_cb->dscp_info.descriptor.dsc_list,
++        p_cb->dscp_info.descriptor.dl_len);
++  }
++#endif
+   if (p_cb->is_le_device) {
+     bta_hh_le_get_dscp_act(p_cb);
+   } else
+diff --git a/system/bt/btif/src/btif_hh.cc b/system/bt/btif/src/btif_hh.cc
+--- a/system/bt/btif/src/btif_hh.cc
++++ b/system/bt/btif/src/btif_hh.cc
+@@ -124,7 +124,53 @@
+ extern void bte_hh_evt(tBTA_HH_EVT event, tBTA_HH* p_data);
+ extern void btif_dm_hh_open_failed(RawAddress* bdaddr);
+ extern void btif_hd_service_registration();
+ extern void btif_hh_timer_timeout(void* data);
++#if defined(RETROBOX_DS3_PRIVATE_DESCRIPTOR_RESEARCH)
++namespace {
++// Private, in-process, fixed-size observation payload: NO ACL epoch, NO grant.
++// No serialized C++ pointers and no changes to public tBTA_HH union/HAL ABI.
++constexpr uint16_t kRetroboxProbeEvent = 0x7f52;
++constexpr size_t kRetroboxProbeMaxBytes = 4096; // Test ceiling, not DS3 limit
++struct RetroboxProbe {
++  uint8_t handle;
++  uint8_t reserved;
++  uint16_t length;
++  uint16_t vendor_id;
++  uint16_t product_id;
++  uint8_t bytes[kRetroboxProbeMaxBytes];
++};
++static_assert(sizeof(RetroboxProbe) == 4104, "Unexpected probe wire layout");
++void btif_hh_ds3_probe_jni_event(uint16_t event, char* data) {
++  if (event != kRetroboxProbeEvent || data == nullptr) return;
++  const auto* probe = reinterpret_cast<const RetroboxProbe*>(data);
++  if (probe->length == 0 || probe->length > kRetroboxProbeMaxBytes) return;
++  // No MAC, descriptor bytes or authenticating secrets in logs.
++  BTIF_TRACE_DEBUG("DS3 research observation only: handle=%u bytes=%u",
++                   probe->handle, probe->length);
++}
++}  // namespace
++
++// Invoked from the BTA Classic HID descriptor producer only when compiled in.
++// This does NOT mint a session epoch or affect the ordinary HID callback.
++void btif_hh_ds3_probe_descriptor(uint8_t handle, uint16_t vendor_id,
++                                  uint16_t product_id, const uint8_t* descriptor,
++                                  uint16_t length) {
++  if (descriptor == nullptr || length == 0 ||
++      length > kRetroboxProbeMaxBytes) return;
++  RetroboxProbe snapshot{};
++  snapshot.handle = handle;
++  snapshot.length = length;
++  snapshot.vendor_id = vendor_id;
++  snapshot.product_id = product_id;
++  memcpy(snapshot.bytes, descriptor, length);
++  const auto result = btif_transfer_context_checked_bytes(
++      &btif_hh_ds3_probe_jni_event, kRetroboxProbeEvent,
++      reinterpret_cast<const char*>(&snapshot), sizeof(snapshot));
++  if (result != BT_STATUS_SUCCESS) {
++    BTIF_TRACE_WARNING("DS3 research observation enqueue failed");
++  }
++}
++#endif
+ 
+ /*******************************************************************************
+  *  Functions

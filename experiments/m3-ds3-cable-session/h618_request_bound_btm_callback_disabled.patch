@@ -1,0 +1,296 @@
+diff --git a/system/bt/stack/l2cap/l2c_link.cc b/system/bt/stack/l2cap/l2c_link.cc
+--- a/system/bt/stack/l2cap/l2c_link.cc
++++ b/system/bt/stack/l2cap/l2c_link.cc
+@@ -36,6 +36,10 @@
+ #include "osi/include/log.h"
+ #include "osi/include/osi.h"
+ #include "stack/btm/btm_int_types.h"
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++#include "stack/l2cap/retrobox_request_refs.h"
++#endif
+ #include "stack/include/acl_api.h"
+ #include "stack/include/bt_types.h"
+ #include "stack/include/hci_error_code.h"
+@@ -301,6 +305,77 @@
+                        tBTM_STATUS status) {
+   l2c_link_sec_comp2(*p_bda, transport, p_ref_data, status);
+ }
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++namespace {
++// Single-threaded Bluetooth stack context only; no cross-thread guarantee.
++retrobox::RequestRefPool g_retrobox_request_refs;
++}  // namespace
++
++void* retrobox_begin_btm_request_ref(tL2C_CCB* ccb) {
++  if (ccb == nullptr || ccb->p_lcb == nullptr || ccb->p_rcb == nullptr ||
++      ccb->p_lcb->transport != BT_TRANSPORT_BR_EDR) return nullptr;
++  const auto* lcb = ccb->p_lcb;
++  const uint64_t epoch = retrobox_acl_epoch_for_lcb(lcb);
++  const retrobox::RequestIdentity id{
++      lcb->Handle(), reinterpret_cast<uintptr_t>(lcb),
++      reinterpret_cast<uintptr_t>(ccb), epoch, ccb->p_rcb->psm};
++  return g_retrobox_request_refs.Begin(id);
++}
++
++void retrobox_retire_refs_for_lcb(const tL2C_LCB* lcb) {
++  if (lcb != nullptr)
++    g_retrobox_request_refs.RetireLcb(reinterpret_cast<uintptr_t>(lcb));
++}
++void retrobox_retire_refs_for_ccb(const tL2C_CCB* ccb) {
++  if (ccb != nullptr)
++    g_retrobox_request_refs.RetireCcb(reinterpret_cast<uintptr_t>(ccb));
++}
++
++// Callback ref is a never-reused slot address, NOT a possibly recycled CCB.
++void retrobox_btm_request_ref_callback(const RawAddress* bda,
++                                      tBT_TRANSPORT transport, void* ref,
++                                      tBTM_STATUS status) {
++  auto pending = g_retrobox_request_refs.PendingIdentity(ref);
++  if (!pending) return;  // Already retired/completed or unknown.
++  if (bda == nullptr || transport != BT_TRANSPORT_BR_EDR) {
++    g_retrobox_request_refs.Retire(ref);
++    return;
++  }
++  tL2C_LCB* lcb = l2cu_find_lcb_by_bd_addr(*bda, transport);
++  if (lcb == nullptr) {
++    g_retrobox_request_refs.Retire(ref);
++    return;
++  }
++  // Only inspect CCB objects from the current LCB live queue.
++  tL2C_CCB* match = nullptr;
++  for (tL2C_CCB* c = lcb->ccb_queue.p_first_ccb; c != nullptr;
++       c = c->p_next_ccb) {
++    if (reinterpret_cast<uintptr_t>(c) == pending->ccb) {
++      match = c;
++      break;
++    }
++  }
++  if (!match || !match->p_rcb || match->p_lcb != lcb) {
++    g_retrobox_request_refs.Retire(ref);
++    return;
++  }
++  const retrobox::RequestIdentity current{
++      lcb->Handle(), reinterpret_cast<uintptr_t>(lcb),
++      reinterpret_cast<uintptr_t>(match), retrobox_acl_epoch_for_lcb(lcb),
++      match->p_rcb->psm};
++  const auto event =
++      status == BTM_DELAY_CHECK ? retrobox::SecurityEvent::kDelay :
++      (status == BTM_SUCCESS || status == BTM_SUCCESS_NO_SECURITY)
++          ? retrobox::SecurityEvent::kSuccess :
++            retrobox::SecurityEvent::kFailure;
++  auto outcome = g_retrobox_request_refs.OnCallback(ref, current, event);
++  if (!outcome.forward) return;
++  // Delegate the unchanged BTM status to the original L2CAP callback. This
++  // wrapper NEVER upgrades negative security to success.
++  l2c_link_sec_comp2(*bda, transport, match, status);
++}
++#endif
+ 
+ void l2c_link_sec_comp2(const RawAddress& p_bda,
+                         UNUSED_ATTR tBT_TRANSPORT transport, void* p_ref_data,
+@@ -391,6 +466,11 @@
+     status = false;
+   } else {
+     p_lcb->SetDisconnectReason(reason);
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++    // Revoke before CCB disconnect callbacks and possible LCB reuse.
++    retrobox_retire_refs_for_lcb(p_lcb);
++#endif
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+     if (p_lcb->transport == BT_TRANSPORT_BR_EDR) {
+       const auto ticket = g_retrobox_acl_observer.Current(
+diff --git a/system/bt/stack/l2cap/l2c_csm.cc b/system/bt/stack/l2cap/l2c_csm.cc
+--- a/system/bt/stack/l2cap/l2c_csm.cc
++++ b/system/bt/stack/l2cap/l2c_csm.cc
+@@ -34,6 +34,13 @@
+ #include "osi/include/log.h"
+ #include "stack/btm/btm_sec.h"
+ #include "stack/include/acl_api.h"
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++extern void* retrobox_begin_btm_request_ref(tL2C_CCB* ccb);
++extern void retrobox_btm_request_ref_callback(const RawAddress* bda,
++                                              tBT_TRANSPORT transport,
++                                              void* ref, tBTM_STATUS status);
++#endif
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+ #include <cstdint>
+ extern uint64_t retrobox_acl_epoch_for_lcb(const tL2C_LCB* p_lcb);
+@@ -310,9 +317,22 @@
+                    p_ccb->p_rcb->psm, static_cast<unsigned long long>(epoch));
+         }
+ #endif
+-        auto status = btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
+-                                               p_ccb->p_rcb->psm, false,
+-                                               &l2c_link_sec_comp, p_ccb);
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++        // Candidate-only research path. Stock BTM security policy is unchanged.
++        void* rb_ref = retrobox_begin_btm_request_ref(p_ccb);
++        auto status = rb_ref
++            ? btm_sec_l2cap_access_req(
++                  p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm, false,
++                  &retrobox_btm_request_ref_callback, rb_ref)
++            : btm_sec_l2cap_access_req(
++                  p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm, false,
++                  &l2c_link_sec_comp, p_ccb);
++#else
++        auto status = btm_sec_l2cap_access_req(p_ccb->p_lcb->remote_bd_addr,
++                                               p_ccb->p_rcb->psm, false,
++                                               &l2c_link_sec_comp, p_ccb);
++#endif
+         if (status == BTM_CMD_STARTED) {
+           // started the security process, tell the peer to set a longer timer
+           l2cu_send_peer_connect_rsp(p_ccb, L2CAP_CONN_PENDING, 0);
+diff --git a/system/bt/stack/l2cap/l2c_utils.cc b/system/bt/stack/l2cap/l2c_utils.cc
+--- a/system/bt/stack/l2cap/l2c_utils.cc
++++ b/system/bt/stack/l2cap/l2c_utils.cc
+@@ -43,6 +43,11 @@
+ #include "stack/include/hci_error_code.h"
+ 
+ tL2C_CCB* l2cu_get_next_channel_in_rr(tL2C_LCB* p_lcb); // TODO Move
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++extern void retrobox_retire_refs_for_lcb(const tL2C_LCB* lcb);
++extern void retrobox_retire_refs_for_ccb(const tL2C_CCB* ccb);
++#endif
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+ extern void retrobox_acl_retire_for_lcb(const tL2C_LCB* p_lcb);
+ #endif
+@@ -151,6 +156,10 @@
+  ******************************************************************************/
+ void l2cu_release_lcb(tL2C_LCB* p_lcb) {
+   tL2C_CCB* p_ccb;
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++  retrobox_retire_refs_for_lcb(p_lcb);
++#endif
+ #if defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
+   // Source also releases LCBs without a dedicated HCI disconnect-complete.
+   retrobox_acl_retire_for_lcb(p_lcb);
+@@ -1542,6 +1551,11 @@
+ 
+   /* If already released, could be race condition */
+   if (!p_ccb->in_use) return;
++#if defined(RETROBOX_DS3_REQUEST_REF_OBSERVE) && \
++    defined(RETROBOX_DS3_ACL_EPOCH_OBSERVE)
++  // Tombstone refs before free-pool reuse of this CCB.
++  retrobox_retire_refs_for_ccb(p_ccb);
++#endif
+ 
+   btsnoop_get_interface()->clear_l2cap_allowlist(
+       p_lcb->Handle(), p_ccb->local_cid, p_ccb->remote_cid);
+diff --git a/system/bt/stack/l2cap/retrobox_request_refs.h b/system/bt/stack/l2cap/retrobox_request_refs.h
+new file mode 100644
+--- /dev/null
++++ b/system/bt/stack/l2cap/retrobox_request_refs.h
+@@ -0,0 +1,106 @@
++// Host model only: opaque BTM callback references, never reused in one process.
++#ifndef RETROBOX_DS3_REQUEST_REFS_H_
++#define RETROBOX_DS3_REQUEST_REFS_H_
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <optional>
++
++namespace retrobox {
++struct RequestIdentity {
++  uint16_t hci_handle;
++  uintptr_t lcb;
++  uintptr_t ccb;
++  uint64_t epoch;
++  uint16_t psm;
++  bool operator==(const RequestIdentity& rhs) const {
++    return hci_handle == rhs.hci_handle && lcb == rhs.lcb &&
++           ccb == rhs.ccb && epoch == rhs.epoch && psm == rhs.psm;
++  }
++};
++enum class SecurityEvent { kDelay, kSuccess, kFailure };
++struct CallbackOutcome {
++  bool forward;
++  bool terminal;
++};
++
++class RequestRefPool {
++ public:
++  static constexpr size_t kCapacity = 64;
++  // Pointers are opaque identity values. Entries are never recycled until
++  // process exit, preventing ABA even when CCB/LCB/HCI handle are reused.
++  void* Begin(const RequestIdentity& id) {
++    if ((id.psm != 0x11 && id.psm != 0x13) || id.hci_handle == 0xffff ||
++        !id.epoch || !id.lcb || !id.ccb) return nullptr;
++    if (next_ == kCapacity) return nullptr;
++    Slot& s = slots_[next_++];
++    s.id = id;
++    s.state = State::kActive;
++    return &s;
++  }
++
++  CallbackOutcome OnCallback(void* opaque, const RequestIdentity& live,
++                             SecurityEvent event) {
++    Slot* slot = Find(opaque);
++    if (!slot || slot->state != State::kActive) return {false, false};
++    if (!(slot->id == live)) {
++      slot->state = State::kRetired;
++      return {false, false};
++    }
++    if (event == SecurityEvent::kDelay) return {true, false};
++    slot->state = State::kCompleted;
++    return {true, true};
++  }
++
++  bool Retire(void* opaque) {
++    Slot* slot = Find(opaque);
++    if (!slot || slot->state != State::kActive) return false;
++    slot->state = State::kRetired;
++    return true;
++  }
++  size_t RetireCcb(uintptr_t ccb) {
++    size_t result = 0;
++    for (size_t i = 0; i < next_; ++i) {
++      Slot& s = slots_[i];
++      if (s.state == State::kActive && s.id.ccb == ccb) {
++        s.state = State::kRetired;
++        ++result;
++      }
++    }
++    return result;
++  }
++  size_t RetireLcb(uintptr_t lcb) {
++    size_t result = 0;
++    for (size_t i = 0; i < next_; ++i) {
++      Slot& s = slots_[i];
++      if (s.state == State::kActive && s.id.lcb == lcb) {
++        s.state = State::kRetired;
++        ++result;
++      }
++    }
++    return result;
++  }
++  std::optional<RequestIdentity> PendingIdentity(void* opaque) {
++    Slot* slot = Find(opaque);
++    if (!slot || slot->state != State::kActive) return std::nullopt;
++    return slot->id;
++  }
++  size_t Issued() const { return next_; }
++
++ private:
++  enum class State { kUnused, kActive, kRetired, kCompleted };
++  struct Slot {
++    RequestIdentity id{};
++    State state = State::kUnused;
++  };
++  Slot* Find(void* opaque) {
++    // Compare pointer values; never dereference untrusted BTM ref_data.
++    for (size_t i = 0; i < next_; ++i)
++      if (opaque == &slots_[i]) return &slots_[i];
++    return nullptr;
++  }
++  std::array<Slot, kCapacity> slots_{};
++  size_t next_ = 0;
++};
++} // namespace retrobox
++#endif
