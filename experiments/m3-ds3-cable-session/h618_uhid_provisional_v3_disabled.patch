@@ -75,7 +75,7 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
        p_dev->hh_poll_thread_id =
            create_thread(btif_hh_poll_event_thread, p_dev);
        break;
-@@ -374,7 +405,15 @@
+@@ -374,7 +405,22 @@
            return;
          } else {
            APPL_TRACE_DEBUG("%s: uhid fd = %d", __func__, p_dev->fd);
@@ -85,6 +85,14 @@ diff --git a/system/bt/btif/co/bta_hh_co.cc b/system/bt/btif/co/bta_hh_co.cc
 +            APPL_TRACE_ERROR("RetroBox provisional UHID registration failed");
 +            close(p_dev->fd);
 +            p_dev->fd = -1;
++            // New-slot open increments device_num before registration.
++            // Undo this local slot mutation on fail-closed abort.
++            btif_hh_cb.device_num--;
++            p_dev->dev_handle = BTA_HH_INVALID_HANDLE;
++            p_dev->attr_mask = 0;
++            p_dev->sub_class = 0;
++            p_dev->app_id = 0;
++            p_dev->local_vup = false;
 +            return;
 +          }
 +#endif
